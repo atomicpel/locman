@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../state.dart';
@@ -21,10 +22,19 @@ class LocmanApp extends StatefulWidget {
 }
 
 class _LocmanAppState extends State<LocmanApp> with WidgetsBindingObserver {
+  final _boundary = GlobalKey();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    widget.state.screenshot = () async {
+      final ro = _boundary.currentContext?.findRenderObject();
+      if (ro is! RenderRepaintBoundary) return null;
+      final image = await ro.toImage(pixelRatio: 1.5);
+      final data = await image.toByteData(format: ImageByteFormat.png);
+      return data?.buffer.asUint8List();
+    };
   }
 
   @override
@@ -56,7 +66,9 @@ class _LocmanAppState extends State<LocmanApp> with WidgetsBindingObserver {
           systemNavigationBarColor: Colors.transparent,
           systemNavigationBarContrastEnforced: false,
         );
-        return PaletteScope(
+        return RepaintBoundary(
+          key: _boundary,
+          child: PaletteScope(
           palette: p,
           child: MaterialApp(
             title: 'Лоцман',
@@ -71,6 +83,7 @@ class _LocmanAppState extends State<LocmanApp> with WidgetsBindingObserver {
                       : _Onboarding(s: s),
             ),
             builder: (context, child) => PaletteScope(palette: p, child: child!),
+          ),
           ),
         );
       },

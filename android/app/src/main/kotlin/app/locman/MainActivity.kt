@@ -87,6 +87,7 @@ class MainActivity : FlutterActivity() {
                         "smoke" to (intent?.getBooleanExtra("smoke", false) ?: false),
                         "skin" to intent?.getStringExtra("skin"),
                         "tun" to intent?.getStringExtra("tun"),
+                        "extDir" to getExternalFilesDir(null)?.absolutePath,
                     )
                 }
             }

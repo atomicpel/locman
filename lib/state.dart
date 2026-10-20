@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -223,12 +224,28 @@ class AppState extends ChangeNotifier {
 
   /// Самопроверка в эмуляторе CI: `am start … --ez smoke true [--es skin island]`.
   /// Пишет в logcat строки «SMOKE: …», по ним скрипт делает снимки экрана.
+  /// Снимок экрана для самопроверки; задаёт интерфейс.
+  Future<Uint8List?> Function()? screenshot;
+
   Future<void> _smoke() async {
-    void say(String s) => debugPrint('SMOKE: $s');
+    final dir = info!.extDir;
+    final logFile = dir == null ? null : File('$dir/smoke.txt');
+    if (logFile != null && logFile.existsSync()) logFile.deleteSync();
+    void say(String s) {
+      debugPrint('SMOKE: $s');
+      logFile?.writeAsStringSync('SMOKE: $s\n', mode: FileMode.append, flush: true);
+      if (s.startsWith('shot ') && dir != null) {
+        final name = s.substring(5);
+        screenshot?.call().then((png) {
+          if (png != null) File('$dir/${info!.smokeSkin ?? 'app'}-$name.png').writeAsBytesSync(png);
+        });
+      }
+    }
     Future<void> pause(int s) => Future.delayed(Duration(seconds: s));
     try {
       final wanted = info!.smokeSkin;
       if (wanted != null) skin = Skin.values.firstWhere((s) => s.name == wanted, orElse: () => skin);
+      probe = 'gentle';
       if (info!.smokeTun != null) tunEngine = info!.smokeTun == 'hev' ? 'hev' : 'xray';
       say('start xray=${info!.xray} version=${info!.versionName} tun=$tunEngine fragment=$fragment');
       if (!onboarded) {
@@ -281,7 +298,12 @@ class AppState extends ChangeNotifier {
       say('shot about');
       await pause(3);
       setTab(AppTab.home);
+      await pause(3);
+      say('shot home-final');
       say('traffic down=$sessionDown up=$sessionUp');
+      await pause(2);
+      await disconnect();
+      await pause(3);
       say('done');
     } catch (e, st) {
       say('error $e $st');

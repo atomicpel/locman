@@ -46,7 +46,8 @@ class Traffic {
 
 class NativeInfo {
   NativeInfo(this.filesDir, this.cacheDir, this.versionName, this.versionCode, this.xray, this.abis,
-      {this.smoke = false, this.smokeSkin, this.smokeTun});
+      {this.smoke = false, this.smokeSkin, this.smokeTun, this.extDir});
+  final String? extDir;
   final String? smokeTun;
   final bool smoke;
   final String? smokeSkin;
@@ -97,6 +98,7 @@ class Native {
       smoke: m['smoke'] == true,
       smokeSkin: m['skin'] as String?,
       smokeTun: m['tun'] as String?,
+      extDir: m['extDir'] as String?,
     );
   }
 
