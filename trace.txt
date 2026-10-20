@@ -1,0 +1,135 @@
+22:26:40 rc=0 adb install -r -g build/app/outputs/flutter-apk/app-release.apk
+22:26:40 rc=0 adb shell appops set app.locman ACTIVATE_VPN allow
+22:26:40 rc=0 adb shell pm grant app.locman android.permission.POST_NOTIFICATIONS
+22:26:40 rc=0 adb shell am force-stop app.locman
+22:26:40 rc=0 adb shell rm -f /sdcard/Android/data/app.locman/files/*.png /sdcard/Android/data/app.locman/files/smoke.txt
+22:26:40 rc=0 adb logcat -c
+22:26:40 rc=0 adb shell am start -n app.locman/.MainActivity --ez smoke true --es skin glass --es tun xray
+22:26:55 devices: List of devices attached emulator-5554	device  
+22:27:15 rc=124 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:27:30 devices: List of devices attached emulator-5554	device  
+22:27:50 rc=124 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:28:05 devices: List of devices attached emulator-5554	device  
+22:28:19 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:28:34 devices: List of devices attached  
+22:28:34 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:28:49 devices: List of devices attached  
+22:28:49 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:29:04 devices: List of devices attached  
+22:29:04 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:29:19 devices: List of devices attached  
+22:29:19 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:29:34 devices: List of devices attached  
+22:29:34 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:29:49 devices: List of devices attached  
+22:29:49 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:30:04 devices: List of devices attached  
+22:30:04 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:30:19 devices: List of devices attached  
+22:30:19 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:30:34 devices: List of devices attached  
+22:30:34 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:30:49 devices: List of devices attached  
+22:30:49 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:31:04 devices: List of devices attached  
+22:31:04 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:31:19 devices: List of devices attached  
+22:31:19 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:31:34 devices: List of devices attached  
+22:31:34 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:31:49 devices: List of devices attached  
+22:31:49 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:32:04 devices: List of devices attached  
+22:32:04 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:32:19 devices: List of devices attached  
+22:32:19 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:32:34 devices: List of devices attached  
+22:32:34 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:32:49 devices: List of devices attached  
+22:32:49 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:33:04 devices: List of devices attached  
+22:33:04 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:33:19 devices: List of devices attached  
+22:33:19 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:33:34 devices: List of devices attached  
+22:33:34 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:33:49 devices: List of devices attached  
+22:33:49 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:34:04 devices: List of devices attached  
+22:34:04 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:34:19 devices: List of devices attached  
+22:34:19 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:34:34 devices: List of devices attached  
+22:34:34 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:34:49 devices: List of devices attached  
+22:34:49 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:34:54 rc=1 adb shell ls /sdcard/Android/data/app.locman/files
+22:35:34 rc=124 adb logcat -d -t 4000
+22:35:34 rc=1 adb shell am force-stop app.locman
+22:35:34 rc=1 adb shell rm -f /sdcard/Android/data/app.locman/files/*.png /sdcard/Android/data/app.locman/files/smoke.txt
+22:35:54 rc=124 adb logcat -c
+22:35:54 rc=1 adb shell am start -n app.locman/.MainActivity --ez smoke true --es skin island --es tun hev
+22:36:09 devices: List of devices attached  
+22:36:09 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:36:24 devices: List of devices attached  
+22:36:24 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:36:39 devices: List of devices attached  
+22:36:39 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:36:54 devices: List of devices attached  
+22:36:54 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:37:09 devices: List of devices attached  
+22:37:09 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:37:24 devices: List of devices attached  
+22:37:24 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:37:39 devices: List of devices attached  
+22:37:39 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:37:54 devices: List of devices attached  
+22:37:54 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:38:09 devices: List of devices attached  
+22:38:09 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:38:24 devices: List of devices attached  
+22:38:24 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:38:39 devices: List of devices attached  
+22:38:39 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:38:54 devices: List of devices attached  
+22:38:54 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:39:09 devices: List of devices attached  
+22:39:09 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:39:24 devices: List of devices attached  
+22:39:24 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:39:39 devices: List of devices attached  
+22:39:39 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:39:54 devices: List of devices attached  
+22:39:55 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:40:10 devices: List of devices attached  
+22:40:10 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:40:25 devices: List of devices attached  
+22:40:25 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:40:40 devices: List of devices attached  
+22:40:40 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:40:55 devices: List of devices attached  
+22:40:55 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:41:10 devices: List of devices attached  
+22:41:10 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:41:25 devices: List of devices attached  
+22:41:25 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:41:40 devices: List of devices attached  
+22:41:40 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:41:55 devices: List of devices attached  
+22:41:55 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:42:10 devices: List of devices attached  
+22:42:10 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:42:25 devices: List of devices attached  
+22:42:25 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:42:40 devices: List of devices attached  
+22:42:40 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:42:55 devices: List of devices attached  
+22:42:55 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:43:10 devices: List of devices attached  
+22:43:10 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:43:25 devices: List of devices attached  
+22:43:25 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:43:40 devices: List of devices attached  
+22:43:40 rc=1 adb shell cat /sdcard/Android/data/app.locman/files/smoke.txt
+22:43:45 rc=1 adb shell ls /sdcard/Android/data/app.locman/files
+22:44:25 rc=124 adb logcat -d -t 4000
