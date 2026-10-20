@@ -1,38 +1,40 @@
 #!/usr/bin/env bash
 # Самопроверка «Лоцмана» в эмуляторе: установка, онбординг, поиск узла, туннель, снимки экрана.
 #   smoke_test.sh APK OUT_DIR
+# Каждый вызов adb — с таймаутом: если эмулятор подвиснет, проверка не повиснет вместе с ним.
 set -u
 APK="$1"; OUT="$2"; PKG=app.locman
 mkdir -p "$OUT"
-adb wait-for-device
-adb shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done'
-adb install -r -g "$APK" || exit 1
-adb shell appops set $PKG ACTIVATE_VPN allow
-adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null || true
-adb logcat -c
+A() { timeout "${T:-20}" adb "$@"; }
+
+timeout 300 adb wait-for-device
+timeout 300 adb shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done'
+T=180 A install -r -g "$APK" || exit 1
+A shell appops set $PKG ACTIVATE_VPN allow
+A shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null || true
 
 run() {   # run SKIN PREFIX TUN
-  local skin="$1" prefix="$2" tun="$3"
-  adb shell am force-stop $PKG
-  adb logcat -c
-  adb shell am start -n $PKG/.MainActivity --ez smoke true --es skin "$skin" --es tun "$tun"
-  local deadline=$((SECONDS + 420)) seen=""
+  local skin="$1" prefix="$2" tun="$3" seen="" deadline=$((SECONDS + 360))
+  A shell am force-stop $PKG
+  A logcat -c
+  A shell am start -n $PKG/.MainActivity --ez smoke true --es skin "$skin" --es tun "$tun"
   while [ $SECONDS -lt $deadline ]; do
-    adb logcat -d -s flutter:I > "$OUT/$prefix-log.txt" 2>/dev/null
-    for shot in $(grep -o 'SMOKE: shot [a-z-]*' "$OUT/$prefix-log.txt" | awk '{print $3}'); do
+    if A logcat -d -s flutter:I > "$OUT/tmp.txt" 2>/dev/null && [ -s "$OUT/tmp.txt" ]; then
+      mv "$OUT/tmp.txt" "$OUT/$prefix-log.txt"
+    fi
+    for shot in $(grep -ao 'SMOKE: shot [a-z-]*' "$OUT/$prefix-log.txt" 2>/dev/null | awk '{print $3}'); do
       case " $seen " in *" $shot "*) ;; *)
-        adb exec-out screencap -p > "$OUT/$prefix-$shot.png"; seen="$seen $shot";;
+        A exec-out screencap -p > "$OUT/$prefix-$shot.png" && seen="$seen $shot";;
       esac
     done
-    grep -q 'SMOKE: done\|SMOKE: error' "$OUT/$prefix-log.txt" && break
-    sleep 2
+    grep -aq 'SMOKE: done\|SMOKE: error' "$OUT/$prefix-log.txt" 2>/dev/null && break
+    sleep 3
   done
-  grep 'SMOKE:' "$OUT/$prefix-log.txt"
+  grep -a 'SMOKE:' "$OUT/$prefix-log.txt" 2>/dev/null | sed 's/.*SMOKE:/SMOKE:/'
+  A shell dumpsys connectivity 2>/dev/null | grep -i -m5 'VPN' > "$OUT/$prefix-vpn.txt" || true
+  T=40 A logcat -d -t 3000 > "$OUT/$prefix-logcat.txt" 2>/dev/null || true
 }
 
 run glass glass xray
-adb shell dumpsys connectivity | grep -i -m5 'VPN' > "$OUT/vpn.txt" || true
-adb logcat -d > "$OUT/logcat-full.txt"
 run island island hev
-run paper paper xray
-grep -q 'SMOKE: probe true' "$OUT/glass-log.txt" && grep -q 'SMOKE: probe true' "$OUT/island-log.txt"
+grep -aq 'SMOKE: probe true' "$OUT/glass-log.txt" && grep -aq 'SMOKE: probe true' "$OUT/island-log.txt"

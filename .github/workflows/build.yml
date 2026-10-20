@@ -203,7 +203,7 @@ jobs:
     name: Проверка в эмуляторе
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 50
     env:
       TARGET_ABI: x86_64
       ABIS: x86_64
