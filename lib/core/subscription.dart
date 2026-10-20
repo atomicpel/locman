@@ -53,6 +53,8 @@ class SubscriptionParser {
     void add(ProxyNode n) {
       if (n.address == '0.0.0.0' || n.address == '127.0.0.1') {
         notices.add(n.name);
+      } else if (_privateLiteral(n.address)) {
+        skipped['private'] = (skipped['private'] ?? 0) + 1;
       } else {
         nodes.putIfAbsent(n.id, () => n);
       }
@@ -107,6 +109,21 @@ class SubscriptionParser {
       skipped: skipped,
       usage: _usage(meta['subscription-userinfo']),
     );
+  }
+
+  /// Адрес-литерал из частной/локальной сети или localhost.
+  static bool _privateLiteral(String host) {
+    final h = host.toLowerCase();
+    if (h == 'localhost' || h.endsWith('.localhost') || h.endsWith('.local')) return true;
+    final m = RegExp(r'^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$').firstMatch(h);
+    if (m != null) {
+      final a = int.parse(m.group(1)!);
+      final b = int.parse(m.group(2)!);
+      return a == 0 || a == 10 || a == 127 || a >= 224 ||
+          (a == 100 && b >= 64 && b < 128) || (a == 169 && b == 254) ||
+          (a == 172 && b >= 16 && b < 32) || (a == 192 && b == 168);
+    }
+    return h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80') || h == '::1';
   }
 
   static Usage? _usage(String? value) {

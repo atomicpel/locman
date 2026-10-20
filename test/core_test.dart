@@ -215,4 +215,11 @@ void main() {
     final named = LinkParser.parse('trojan://p@srv.example.com:443?sni=front.example.com#t')!.withAddress('5.6.7.8');
     expect(named.params['sni'], 'front.example.com');
   });
+
+  test('узлы с локальными адресами отбрасываются', () {
+    final s = SubscriptionParser.parse(
+        '$vless\ntrojan://p@192.168.1.1:443#lan\ntrojan://p@10.0.2.2:5555#emu\ntrojan://p@localhost:443#me', 'src');
+    expect(s.nodes.length, 1);
+    expect(s.skipped['private'], 3);
+  });
 }

@@ -135,11 +135,32 @@ class Net {
     return e.toString();
   }
 
+  /// Частные, локальные и служебные адреса: узлы с ними не проверяем и не используем,
+  /// иначе чужая подписка может заставить телефон стучаться в домашнюю сеть.
+  static bool isPrivate(InternetAddress a) {
+    if (a.isLoopback || a.isLinkLocal || a.isMulticast) return true;
+    final b = a.rawAddress;
+    if (a.type == InternetAddressType.IPv4) {
+      return b[0] == 0 ||
+          b[0] == 10 ||
+          b[0] == 127 ||
+          (b[0] == 100 && b[1] >= 64 && b[1] < 128) ||
+          (b[0] == 169 && b[1] == 254) ||
+          (b[0] == 172 && b[1] >= 16 && b[1] < 32) ||
+          (b[0] == 192 && b[1] == 168) ||
+          b[0] >= 224;
+    }
+    return (b[0] & 0xfe) == 0xfc || a.address == '::';
+  }
+
   /// TCP-рукопожатие с сервером узла, мс или -1.
   static Future<int> tcping(String host, int port, {Duration timeout = const Duration(milliseconds: 2500)}) async {
     final sw = Stopwatch()..start();
     try {
-      final s = await Socket.connect(host, port, timeout: timeout);
+      final addrs = await InternetAddress.lookup(host).timeout(timeout);
+      final target = addrs.where((a) => !isPrivate(a)).toList();
+      if (target.isEmpty) return -1;
+      final s = await Socket.connect(target.first, port, timeout: timeout);
       s.destroy();
       return max(1, sw.elapsedMilliseconds);
     } catch (_) {
@@ -249,7 +270,7 @@ class Net {
             .whereType<Map>()
             .where((a) => a['type'] == 1)
             .map((a) => a['data'].toString())
-            .where((ip) => InternetAddress.tryParse(ip) != null)
+            .where((ip) => InternetAddress.tryParse(ip) != null && !isPrivate(InternetAddress(ip)))
             .toList();
         if (ips.isNotEmpty) return ips;
       } catch (_) {
