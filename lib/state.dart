@@ -180,6 +180,10 @@ class AppState extends ChangeNotifier {
   final List<int> history = [];
 
   int _seekGen = 0;
+
+  /// Сколько TCP-проверок одновременно. В эмуляторе меньше: его сеть (slirp) захлёбывается.
+  int _tcpParallel = 48;
+  int _poolLimit = 240;
   Timer? _toastTimer;
   Timer? _ticker;
   Timer? _periodic;
@@ -246,6 +250,8 @@ class AppState extends ChangeNotifier {
       final wanted = info!.smokeSkin;
       if (wanted != null) skin = Skin.values.firstWhere((s) => s.name == wanted, orElse: () => skin);
       probe = 'gentle';
+      _tcpParallel = 6;
+      _poolLimit = 60;
       _smokeSink = say;
       var beats = 0;
       Timer.periodic(const Duration(seconds: 5), (t) {
@@ -887,7 +893,7 @@ class AppState extends ChangeNotifier {
     checkingDone = 0;
     notifyListeners();
     final tcpAlive = <ProxyNode>[];
-    await _pool(list, 48, (n) async {
+    await _pool(list, _tcpParallel, (n) async {
       if (n.coreOnly) {
         tcpAlive.add(n);
       } else {
@@ -1063,14 +1069,14 @@ class AppState extends ChangeNotifier {
   }
 
   Future<ProxyNode?> _seek(NetKind? kind, Set<String> tried, bool Function() cancelled) async {
-    final pool = _candidates(kind).where((n) => !tried.contains(n.id)).take(240).toList();
+    final pool = _candidates(kind).where((n) => !tried.contains(n.id)).take(_poolLimit).toList();
     if (pool.isEmpty) return null;
 
     seekStep = 2;
     notifyListeners();
     _smokeSink?.call('seek pool=${pool.length}');
     final tcp = <ProxyNode, int>{};
-    await _pool(pool, 48, (n) async {
+    await _pool(pool, _tcpParallel, (n) async {
       if (cancelled()) return;
       tcp[n] = n.coreOnly ? 0 : await Net.tcping(n.address, n.port);
       if (tcp[n]! < 0) _record(n.id, -1, real: false);
