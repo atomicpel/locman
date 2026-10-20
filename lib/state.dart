@@ -184,6 +184,7 @@ class AppState extends ChangeNotifier {
   /// Сколько TCP-проверок одновременно. В эмуляторе меньше: его сеть (slirp) захлёбывается.
   int _tcpParallel = 48;
   int _poolLimit = 240;
+  bool _skipTcp = false;
   Timer? _toastTimer;
   Timer? _ticker;
   Timer? _periodic;
@@ -251,7 +252,8 @@ class AppState extends ChangeNotifier {
       if (wanted != null) skin = Skin.values.firstWhere((s) => s.name == wanted, orElse: () => skin);
       probe = 'gentle';
       _tcpParallel = 6;
-      _poolLimit = 60;
+      _poolLimit = 16;
+      _skipTcp = info!.smokeSkin == 'glass';
       _smokeSink = say;
       var beats = 0;
       Timer.periodic(const Duration(seconds: 5), (t) {
@@ -1078,7 +1080,7 @@ class AppState extends ChangeNotifier {
     final tcp = <ProxyNode, int>{};
     await _pool(pool, _tcpParallel, (n) async {
       if (cancelled()) return;
-      tcp[n] = n.coreOnly ? 0 : await Net.tcping(n.address, n.port);
+      tcp[n] = (n.coreOnly || _skipTcp) ? 0 : await Net.tcping(n.address, n.port);
       if (tcp[n]! < 0) _record(n.id, -1, real: false);
     });
     if (cancelled()) return null;
