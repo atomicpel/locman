@@ -1,0 +1,528 @@
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+
+import '../core/ru.dart';
+import '../engine/native.dart';
+import '../state.dart';
+import 'theme.dart';
+import 'widgets.dart';
+
+String settingsTitle(SettingsPage page) => switch (page) {
+      SettingsPage.look => 'Оформление',
+      SettingsPage.link => 'Подключение',
+      SettingsPage.apps => 'Мимо узла',
+      SettingsPage.safe => 'Безопасность',
+      SettingsPage.probe => 'Проверка узлов',
+      SettingsPage.about => 'О клиенте',
+    };
+
+class MoreScreen extends StatelessWidget {
+  const MoreScreen({super.key, required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (s.settingsPage) {
+      SettingsPage.look => _LookPage(s: s),
+      SettingsPage.link => _LinkPage(s: s),
+      SettingsPage.apps => _AppsPage(s: s),
+      SettingsPage.safe => _SafePage(s: s),
+      SettingsPage.probe => _ProbePage(s: s),
+      SettingsPage.about => _AboutPage(s: s),
+      null => _MoreIndex(s: s),
+    };
+  }
+}
+
+class _MoreIndex extends StatelessWidget {
+  const _MoreIndex({required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    final rows = [
+      (SettingsPage.look, 'Оформление', skinMeta[s.skin]!.$1),
+      (SettingsPage.link, 'Подключение', 'Режим ${modeMeta[s.mode]!.$1}, работа в фоне'),
+      (SettingsPage.apps, 'Мимо узла', s.excludes.isEmpty ? 'Приложения без туннеля' : 'Выбрано: ${s.excludes.length}'),
+      (SettingsPage.safe, 'Безопасность', 'DNS ${dnsMeta[s.dns]} и скрытие слабых узлов'),
+      (SettingsPage.probe, 'Проверка узлов', probeMeta[s.probe]!.$1),
+      (SettingsPage.about, 'О клиенте', s.update != null ? 'Доступна версия ${s.update!.versionName}' : 'Версия, обновления, журнал'),
+    ];
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        for (final (page, title, line) in rows) ...[
+          Pressable(
+            onTap: () => s.setSettingsPage(page),
+            label: title,
+            child: Panel(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: p.text(16, weight: FontWeight.w500)),
+                        Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: p.text(14, color: p.muted)),
+                      ],
+                    ),
+                  ),
+                  Text('→', style: p.text(16, color: p.muted)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _LookPage extends StatelessWidget {
+  const _LookPage({required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    final locked = skinMeta[s.skin]!.$3;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        for (final skin in Skin.values) ...[
+          Pressable(
+            onTap: () => s.setSkin(skin),
+            label: skinMeta[skin]!.$1,
+            child: Panel(
+              highlight: s.skin == skin,
+              color: s.skin == skin ? p.surface : p.surface2,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(skinMeta[skin]!.$1, style: p.text(16, weight: FontWeight.w500)),
+                        Text(skinMeta[skin]!.$2, style: p.text(14, color: p.muted)),
+                      ],
+                    ),
+                  ),
+                  if (s.skin == skin) Icon(Icons.check_rounded, color: p.accent),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        const SizedBox(height: 12),
+        const SectionTitle('Тема'),
+        const SizedBox(height: 8),
+        if (locked)
+          Text('У этого облика только тёмная тема.', style: p.text(14, color: p.muted))
+        else
+          Segment<String>(
+            value: s.scheme,
+            onChanged: s.setScheme,
+            options: const [('dark', 'Тёмная'), ('light', 'Светлая'), ('system', 'Система')],
+          ),
+      ],
+    );
+  }
+}
+
+class _LinkPage extends StatefulWidget {
+  const _LinkPage({required this.s});
+  final AppState s;
+
+  @override
+  State<_LinkPage> createState() => _LinkPageState();
+}
+
+class _LinkPageState extends State<_LinkPage> with WidgetsBindingObserver {
+  bool? _restricted;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _check();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _check();
+  }
+
+  Future<void> _check() async {
+    try {
+      final r = await Native.batteryRestricted();
+      if (mounted) setState(() => _restricted = r);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final p = PaletteScope.of(context);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        const SectionTitle('Режим сети'),
+        const SizedBox(height: 8),
+        Segment<String>(
+          value: s.mode,
+          onChanged: s.setMode,
+          options: [for (final e in modeMeta.entries) (e.key, e.value.$1)],
+        ),
+        const SizedBox(height: 8),
+        Text('${modeMeta[s.mode]!.$2}.', style: p.text(14, color: p.muted)),
+        const SizedBox(height: 16),
+        SettingRow(
+          title: 'Российские сервисы напрямую',
+          line: 'Банки, Госуслуги, Яндекс, VK и маркетплейсы не идут в узел — ни сайты, ни приложения.',
+          control: PillSwitch(on: s.directRu, onChanged: s.setDirectRu),
+        ),
+        const SizedBox(height: 12),
+        SettingRow(
+          title: 'Включать при открытии',
+          line: 'Открыли «Лоцман» — он сам прокладывает ход.',
+          control: PillSwitch(on: s.autoConnect, onChanged: s.setAutoConnect),
+        ),
+        const SizedBox(height: 24),
+        const SectionTitle(
+          'Работа в фоне',
+          line: 'HyperOS на Poco любит выключать фоновые приложения. Чтобы VPN не отваливался, разрешите три вещи.',
+        ),
+        const SizedBox(height: 12),
+        SettingRow(
+          title: 'Без ограничений батареи',
+          line: _restricted == null
+              ? 'Разрешить работу в фоне'
+              : (_restricted! ? 'Сейчас ограничено — нажмите и выберите «Разрешить»' : 'Готово: ограничений нет'),
+          control: Icon(
+            _restricted == false ? Icons.check_circle_rounded : Icons.battery_alert_rounded,
+            color: _restricted == false ? p.accent : p.muted,
+          ),
+          onTap: Native.openBattery,
+        ),
+        const SizedBox(height: 12),
+        SettingRow(
+          title: 'Автозапуск',
+          line: 'В настройках Xiaomi включите автозапуск для «Лоцмана».',
+          control: Icon(Icons.open_in_new_rounded, color: p.muted),
+          onTap: Native.openAutostart,
+        ),
+        const SizedBox(height: 12),
+        SettingRow(
+          title: 'Постоянный VPN',
+          line: 'Настройки Android → VPN → шестерёнка у «Лоцмана» → «Постоянная VPN». Тогда туннель поднимется сам после перезагрузки.',
+          control: Icon(Icons.open_in_new_rounded, color: p.muted),
+          onTap: Native.openVpnSettings,
+        ),
+      ],
+    );
+  }
+}
+
+class _AppsPage extends StatefulWidget {
+  const _AppsPage({required this.s});
+  final AppState s;
+
+  @override
+  State<_AppsPage> createState() => _AppsPageState();
+}
+
+class _AppsPageState extends State<_AppsPage> {
+  List<InstalledApp>? _apps;
+  String _q = '';
+  static final Map<String, Uint8List?> _icons = {};
+
+  @override
+  void initState() {
+    super.initState();
+    Native.apps().then((a) {
+      if (mounted) setState(() => _apps = a);
+    }).catchError((_) {
+      if (mounted) setState(() => _apps = const []);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final p = PaletteScope.of(context);
+    final apps = (_apps ?? const <InstalledApp>[])
+        .where((a) => _q.isEmpty || a.label.toLowerCase().contains(_q) || a.package.contains(_q))
+        .toList()
+      ..sort((a, b) {
+        int rank(InstalledApp x) => s.excludes.contains(x.package) || (s.directRu && directApps.contains(x.package)) ? 0 : 1;
+        final r = rank(a).compareTo(rank(b));
+        return r != 0 ? r : a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      });
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Отмеченные приложения не заходят в туннель. При «Российские сервисы напрямую» '
+                'банки и маркетплейсы уже идут мимо — они отмечены сами.',
+                style: p.text(14, color: p.muted),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
+                style: p.text(14),
+                decoration: InputDecoration(
+                  isDense: true,
+                  prefixIcon: Icon(Icons.search_rounded, color: p.muted, size: 18),
+                  hintText: 'Поиск приложения',
+                  hintStyle: p.text(14, color: p.muted),
+                  filled: true,
+                  fillColor: p.surface,
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(p.rPill), borderSide: BorderSide(color: p.border)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(p.rPill), borderSide: BorderSide(color: p.accent)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _apps == null
+              ? Center(child: CircularProgressIndicator(color: p.accent))
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  itemCount: apps.length,
+                  separatorBuilder: (_, __) => Divider(height: 1, color: p.border),
+                  itemBuilder: (context, i) {
+                    final a = apps[i];
+                    final auto = s.directRu && directApps.contains(a.package);
+                    final on = auto || s.excludes.contains(a.package);
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          _AppIcon(package: a.package, cache: _icons),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(a.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: p.text(15)),
+                                if (auto) Text('напрямую как российский сервис', style: p.text(12, color: p.muted)),
+                              ],
+                            ),
+                          ),
+                          PillSwitch(on: on, onChanged: auto ? (_) {} : (_) => s.toggleExclude(a.package), label: a.label),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AppIcon extends StatefulWidget {
+  const _AppIcon({required this.package, required this.cache});
+  final String package;
+  final Map<String, Uint8List?> cache;
+
+  @override
+  State<_AppIcon> createState() => _AppIconState();
+}
+
+class _AppIconState extends State<_AppIcon> {
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.cache.containsKey(widget.package)) {
+      Native.appIcon(widget.package).then((b) {
+        widget.cache[widget.package] = b;
+        if (mounted) setState(() {});
+      }).catchError((_) {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = widget.cache[widget.package];
+    return SizedBox(
+      width: 36,
+      height: 36,
+      child: bytes == null ? const SizedBox() : Image.memory(bytes, gaplessPlayback: true),
+    );
+  }
+}
+
+class _SafePage extends StatelessWidget {
+  const _SafePage({required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        SettingRow(
+          title: 'Скрывать небезопасные',
+          line: 'Узлы без шифрования, без проверки сертификата и со старым шифрованием не попадают в список.',
+          control: PillSwitch(on: s.hideInsecure, onChanged: s.setHideInsecure),
+        ),
+        const SizedBox(height: 16),
+        const SectionTitle('DNS по HTTPS', line: 'Запросы имён идут зашифрованными через узел — провайдер их не видит.'),
+        const SizedBox(height: 8),
+        Segment<String>(
+          value: s.dns,
+          onChanged: s.setDns,
+          options: [for (final e in dnsMeta.entries) (e.key, e.value)],
+        ),
+        const SizedBox(height: 16),
+        const SettingRow(
+          title: 'Локальный прокси под паролем',
+          line: 'Входы ядра Xray слушают только 127.0.0.1 и закрыты одноразовым паролем — другие приложения ими не воспользуются.',
+        ),
+      ],
+    );
+  }
+}
+
+class _ProbePage extends StatelessWidget {
+  const _ProbePage({required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        const SectionTitle('Скорость проверки'),
+        const SizedBox(height: 8),
+        Segment<String>(
+          value: s.probe,
+          onChanged: s.setProbe,
+          options: [for (final e in probeMeta.entries) (e.key, e.value.$1)],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Сколько узлов проверяем одновременно: ${probeMeta[s.probe]!.$2}. Быстрая сильнее грузит сеть и батарею.',
+          style: p.text(14, color: p.muted),
+        ),
+        const SizedBox(height: 16),
+        SettingRow(
+          title: 'Скрывать дубли',
+          line: 'Один и тот же сервер из разных подписок — одна строка.',
+          control: PillSwitch(on: s.hideDupes, onChanged: s.setHideDupes),
+        ),
+      ],
+    );
+  }
+}
+
+class _AboutPage extends StatelessWidget {
+  const _AboutPage({required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    final info = s.info;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Лоцман', style: p.text(24, weight: FontWeight.w600, display: true)),
+              const SizedBox(height: 4),
+              Text(
+                'Версия ${info?.versionName ?? '—'} · ядро Xray ${info?.xray ?? '—'}',
+                style: p.text(14, color: p.muted),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'VPN-клиент на ядре Xray: одна кнопка, рабочий узел находится сам. '
+                'Без аналитики и рекламы. Код открыт под GPL-3.0, основан на Farvater.',
+                style: p.text(14, color: p.muted),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (s.update != null)
+          Panel(
+            highlight: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Доступна версия ${s.update!.versionName}', style: p.text(16, weight: FontWeight.w600)),
+                for (final n in s.update!.notes) Text('• $n', style: p.text(14, color: p.muted)),
+                const SizedBox(height: 12),
+                if (s.updateProgress != null)
+                  LinearProgressIndicator(value: s.updateProgress, color: p.accent, backgroundColor: p.border)
+                else
+                  PillButton(label: 'Скачать и установить', primary: true, onTap: s.installUpdate),
+              ],
+            ),
+          )
+        else
+          PillButton(
+            label: s.checkingUpdate ? 'Проверяем…' : 'Проверить обновления',
+            onTap: s.checkingUpdate ? null : () => s.checkUpdate(),
+          ),
+        if (s.updateError != null) ...[
+          const SizedBox(height: 8),
+          Text('Обновления: ${s.updateError}', style: p.text(13, color: p.danger)),
+        ],
+        const SizedBox(height: 12),
+        PillButton(label: 'Страница проекта', onTap: () => Native.openUrl('https://github.com/$repo')),
+        const SizedBox(height: 24),
+        const SectionTitle('Журнал'),
+        const SizedBox(height: 8),
+        if (s.journal.isEmpty)
+          Text('Пока пусто.', style: p.text(14, color: p.muted))
+        else
+          for (final e in s.journal.take(30))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 48,
+                    child: Text(_time(e.at), style: p.text(12, color: p.muted)),
+                  ),
+                  Expanded(child: Text(e.text, style: p.text(13))),
+                ],
+              ),
+            ),
+        const SizedBox(height: 24),
+        PillButton(label: 'Сбросить настройки', danger: true, onTap: s.resetAll),
+      ],
+    );
+  }
+
+  String _time(int ms) {
+    final d = DateTime.fromMillisecondsSinceEpoch(ms);
+    return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+}
