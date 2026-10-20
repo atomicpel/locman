@@ -5,7 +5,12 @@
 set -u
 APK="$1"; OUT="$2"; PKG=app.locman
 mkdir -p "$OUT"
-A() { timeout "${T:-20}" adb "$@"; }
+TRACE="$OUT/trace.txt"
+A() {
+  timeout "${T:-20}" adb "$@"; local rc=$?
+  echo "$(date +%T) rc=$rc adb $*" | cut -c1-200 >> "$TRACE"
+  return $rc
+}
 
 timeout 300 adb wait-for-device
 timeout 300 adb shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done'
@@ -23,6 +28,7 @@ run() {   # run SKIN PREFIX TUN
   # Пока поднят VPN, adb в эмуляторе может не отвечать — опрашиваем редко и с таймаутом.
   while [ $SECONDS -lt $deadline ]; do
     sleep 15
+    echo "$(date +%T) devices: $(timeout 10 adb devices | tr '\n' ' ')" >> "$TRACE"
     if A shell cat "$dir/smoke.txt" > "$OUT/tmp.txt" 2>/dev/null && [ -s "$OUT/tmp.txt" ]; then
       mv "$OUT/tmp.txt" "$OUT/$prefix-log.txt"
     fi
