@@ -84,10 +84,11 @@ class LocmanVpnService : VpnService() {
             .setSession(spec.name)
             .setMtu(spec.mtu)
             .addAddress("10.10.14.1", 30)
-            .addRoute("0.0.0.0", 0)
             .addDnsServer("1.1.1.1")
+        // Локальная сеть (роутер, камеры, принтеры) остаётся мимо туннеля, всё остальное — в туннель.
+        Routes.publicIpv4().forEach { (addr, len) -> builder.addRoute(addr, len) }
         // IPv6 тоже заворачиваем, чтобы он не утекал мимо узла; DNS отдаёт только IPv4.
-        runCatching { builder.addAddress("fd66:6c6f:6373::1", 126).addRoute("::", 0) }
+        runCatching { builder.addAddress("fd66:6c6f:6373::1", 126).addRoute("2000::", 3) }
         runCatching { builder.addDisallowedApplication(packageName) }
         spec.bypass.forEach { pkg -> runCatching { builder.addDisallowedApplication(pkg) } }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
