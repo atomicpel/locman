@@ -34,7 +34,13 @@ object XrayEngine {
     private fun libMethod(name: String): Method? =
         runCatching { Class.forName(LIB).methods.firstOrNull { it.name == name } }.getOrNull()
 
+    @Volatile
+    private var initStarted = false
+
+    @Synchronized
     fun init(context: Context) {
+        if (initStarted) return
+        initStarted = true
         val dir = context.filesDir.absolutePath
         thread(name = "xray-init") {
             if (isAvailable) runCatching {

@@ -2,9 +2,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
+import '../core/xray_config.dart';
+
 /// Состояние службы VPN, как его видит Android-часть.
 class VpnStatus {
-  const VpnStatus(this.phase, {this.name, this.nodeId, this.since, this.error});
+  const VpnStatus(this.phase, {this.name, this.nodeId, this.since, this.error, this.local});
 
   /// idle, connecting, connected, failed
   final String phase;
@@ -13,12 +15,23 @@ class VpnStatus {
   final int? since;
   final String? error;
 
+  /// Входы Xray поднятого туннеля (только из `state()`).
+  final LocalProxy? local;
+
   static VpnStatus fromMap(Map m) => VpnStatus(
         (m['phase'] ?? 'idle') as String,
         name: m['name'] as String?,
         nodeId: m['nodeId'] as String?,
         since: (m['since'] as num?)?.toInt(),
         error: m['error'] as String?,
+        local: (m['httpPort'] as num?) != null && (m['httpPort'] as num) > 0
+            ? LocalProxy(
+                socksPort: (m['socksPort'] as num).toInt(),
+                httpPort: (m['httpPort'] as num).toInt(),
+                user: m['user'] as String,
+                pass: m['pass'] as String,
+              )
+            : null,
       );
 }
 
@@ -32,7 +45,10 @@ class Traffic {
 }
 
 class NativeInfo {
-  NativeInfo(this.filesDir, this.cacheDir, this.versionName, this.versionCode, this.xray, this.abis);
+  NativeInfo(this.filesDir, this.cacheDir, this.versionName, this.versionCode, this.xray, this.abis,
+      {this.smoke = false, this.smokeSkin});
+  final bool smoke;
+  final String? smokeSkin;
   final List<String> abis;
   final String filesDir;
   final String cacheDir;
@@ -77,6 +93,8 @@ class Native {
       (m['versionCode'] as num).toInt(),
       m['xray'] as String?,
       ((m['abis'] as List?) ?? const []).map((e) => e.toString()).toList(),
+      smoke: m['smoke'] == true,
+      smokeSkin: m['skin'] as String?,
     );
   }
 
@@ -89,6 +107,7 @@ class Native {
     required String name,
     required String nodeId,
     required int socksPort,
+    required int httpPort,
     required String user,
     required String pass,
     required List<String> bypass,
@@ -99,6 +118,7 @@ class Native {
         'name': name,
         'nodeId': nodeId,
         'socksPort': socksPort,
+        'httpPort': httpPort,
         'user': user,
         'pass': pass,
         'bypass': bypass,

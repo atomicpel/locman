@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 
 import 'core/b64.dart';
 import 'core/catalog.dart';
-import 'core/link_parser.dart';
 import 'core/node.dart';
 import 'core/ru.dart';
 import 'core/subscription.dart';
@@ -212,7 +211,77 @@ class AppState extends ChangeNotifier {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     _periodic = Timer.periodic(const Duration(minutes: 15), (_) => unawaited(_background()));
     unawaited(_background());
-    if (onboarded && autoConnect && phase == Phase.off) unawaited(connect());
+    if (info?.smoke == true) {
+      unawaited(_smoke());
+    } else if (onboarded && autoConnect && phase == Phase.off) {
+      unawaited(connect());
+    }
+  }
+
+  /// Самопроверка в эмуляторе CI: `am start … --ez smoke true [--es skin island]`.
+  /// Пишет в logcat строки «SMOKE: …», по ним скрипт делает снимки экрана.
+  Future<void> _smoke() async {
+    void say(String s) => debugPrint('SMOKE: $s');
+    Future<void> pause(int s) => Future.delayed(Duration(seconds: s));
+    try {
+      final wanted = info!.smokeSkin;
+      if (wanted != null) skin = Skin.values.firstWhere((s) => s.name == wanted, orElse: () => skin);
+      say('start xray=${info!.xray} version=${info!.versionName}');
+      if (!onboarded) {
+        onboarded = true;
+        publicOn = true;
+        _save();
+        notifyListeners();
+      }
+      await refreshAll();
+      final perSource = [
+        for (final s in allSources)
+          if (isEnabled(s)) '${s.id}=${nodesBySource[s.id]?.length ?? 0}${sourceInfo[s.id]?.error != null ? '(!)' : ''}',
+      ];
+      say('sources ${perSource.join(' ')}');
+      say('nodes $visibleCount');
+      await pause(2);
+      say('shot home-off');
+      await pause(3);
+      await connect();
+      final n = nodeById(activeId);
+      if (phase == Phase.on && n != null) {
+        say('connected ${n.title} ${n.protocol.title}/${n.transportLabel} kind=${detected?.name}');
+        say('probe ${await Net.probeTunnel()}');
+        String ip(String body) =>
+            RegExp(r'^ip=(.+)$', multiLine: true).firstMatch(body)?.group(1) ?? '?';
+        try {
+          final via = await Net.get('https://www.cloudflare.com/cdn-cgi/trace', viaTunnel: true);
+          final direct = await Net.get('https://www.cloudflare.com/cdn-cgi/trace');
+          say('ip tunnel=${ip(via.body)} direct=${ip(direct.body)}');
+        } catch (e) {
+          say('ip error ${_short(e)}');
+        }
+      } else {
+        say('fail ${failText ?? phase.name}');
+      }
+      await pause(5);
+      say('shot home-on');
+      await pause(3);
+      setTab(AppTab.nodes);
+      await pause(3);
+      say('shot nodes');
+      await pause(3);
+      setTab(AppTab.sources);
+      await pause(3);
+      say('shot sources');
+      await pause(3);
+      setTab(AppTab.more);
+      setSettingsPage(SettingsPage.about);
+      await pause(3);
+      say('shot about');
+      await pause(3);
+      setTab(AppTab.home);
+      say('traffic down=$sessionDown up=$sessionUp');
+      say('done');
+    } catch (e, st) {
+      say('error $e $st');
+    }
   }
 
   /// Обновления по расписанию, пока приложение открыто.
@@ -905,6 +974,7 @@ class AppState extends ChangeNotifier {
     final kind = _kindForMode();
 
     final tried = <String>{};
+    var started = false;
     ProxyNode? chosen;
     if (nodeId != null) {
       chosen = nodeById(nodeId);
@@ -917,13 +987,14 @@ class AppState extends ChangeNotifier {
         chosen = await _seek(kind, tried, cancelled);
         if (cancelled()) return;
         if (chosen == null) {
-          _fail('Рабочий узел не найден');
+          _fail('Рабочий узел не найден', stopTunnel: started);
           return;
         }
       }
       tried.add(chosen.id);
       seekStep = 4;
       notifyListeners();
+      started = true;
       final ok = await _bring(chosen, cancelled);
       if (cancelled()) return;
       if (ok) return;
@@ -931,7 +1002,7 @@ class AppState extends ChangeNotifier {
       log('${chosen.title} не пропускает трафик, ищем другой');
       chosen = null;
     }
-    _fail('Узлы не пропускают трафик');
+    _fail('Узлы не пропускают трафик', stopTunnel: started);
   }
 
   Future<ProxyNode?> _seek(NetKind? kind, Set<String> tried, bool Function() cancelled) async {
@@ -981,6 +1052,7 @@ class AppState extends ChangeNotifier {
         name: n.title,
         nodeId: n.id,
         socksPort: local.socksPort,
+        httpPort: local.httpPort,
         user: local.user,
         pass: local.pass,
         bypass: bypass,
@@ -1025,7 +1097,12 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
-  void _fail(String text) {
+  void _fail(String text, {bool stopTunnel = false}) {
+    if (stopTunnel) {
+      // Служба осталась на неработающем узле — гасим, чтобы не держать телефон без сети.
+      Net.tunnel = null;
+      unawaited(Native.stop().catchError((_) {}));
+    }
     phase = Phase.fail;
     seekStep = 0;
     failText = text;
@@ -1058,6 +1135,9 @@ class AppState extends ChangeNotifier {
       activeId = s.nodeId;
       connectedAt = s.since ?? DateTime.now().millisecondsSinceEpoch;
       notifyListeners();
+    }
+    if (s.phase == 'connected' && s.local != null && Net.tunnel == null) {
+      Net.tunnel = s.local;
     } else if ((s.phase == 'idle' || s.phase == 'failed') && phase == Phase.on) {
       phase = s.phase == 'failed' ? Phase.fail : Phase.off;
       failText = s.error;

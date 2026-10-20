@@ -14,6 +14,7 @@ data class StartSpec(
     val name: String,
     val nodeId: String,
     val socksPort: Int,
+    val httpPort: Int,
     val user: String,
     val pass: String,
     val bypass: List<String>,
@@ -21,7 +22,7 @@ data class StartSpec(
 ) {
     fun toJson(): String = JSONObject()
         .put("config", config).put("name", name).put("nodeId", nodeId)
-        .put("socksPort", socksPort).put("user", user).put("pass", pass)
+        .put("socksPort", socksPort).put("httpPort", httpPort).put("user", user).put("pass", pass)
         .put("bypass", JSONArray(bypass)).put("mtu", mtu)
         .toString()
 
@@ -43,6 +44,7 @@ data class StartSpec(
                 name = j.optString("name", "Лоцман"),
                 nodeId = j.optString("nodeId", ""),
                 socksPort = j.getInt("socksPort"),
+                httpPort = j.optInt("httpPort", 0),
                 user = j.getString("user"),
                 pass = j.getString("pass"),
                 bypass = (0 until bypass.length()).map { bypass.getString(it) },

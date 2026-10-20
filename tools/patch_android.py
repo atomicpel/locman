@@ -6,6 +6,7 @@
 Gradle-файл не хранится в репозитории, чтобы всегда совпадать с версией Flutter;
 если шаблон изменится, скрипт громко упадёт.
 """
+import os
 import pathlib
 import re
 import shutil
@@ -47,7 +48,7 @@ replace(
     r"""\1
         ndk {
             abiFilters.clear()
-            abiFilters.add("arm64-v8a")
+            abiFilters.add("@ABI@")
         }""",
     "defaultConfig {",
 )
@@ -96,6 +97,12 @@ replace(
 """,
     "android {",
 )
+
+# arm64-v8a для телефона; x86_64 — только для проверки в эмуляторе CI.
+ABI = os.environ.get("TARGET_ABI", "arm64-v8a")
+if ABI not in ("arm64-v8a", "x86_64"):
+    sys.exit(f"patch_android: неизвестный TARGET_ABI {ABI}")
+text = text.replace("@ABI@", ABI)
 
 text = text.rstrip("\n") + """
 

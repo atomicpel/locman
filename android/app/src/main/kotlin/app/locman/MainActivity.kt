@@ -84,6 +84,8 @@ class MainActivity : FlutterActivity() {
                         "versionCode" to code,
                         "xray" to XrayEngine.version,
                         "abis" to Build.SUPPORTED_ABIS.toList(),
+                        "smoke" to (intent?.getBooleanExtra("smoke", false) ?: false),
+                        "skin" to intent?.getStringExtra("skin"),
                     )
                 }
             }
@@ -119,6 +121,7 @@ class MainActivity : FlutterActivity() {
                     name = call.argument<String>("name") ?: "Лоцман",
                     nodeId = call.argument<String>("nodeId") ?: "",
                     socksPort = call.argument<Int>("socksPort")!!,
+                    httpPort = call.argument<Int>("httpPort") ?: 0,
                     user = call.argument<String>("user")!!,
                     pass = call.argument<String>("pass")!!,
                     bypass = call.argument<List<String>>("bypass") ?: emptyList(),
@@ -137,7 +140,18 @@ class MainActivity : FlutterActivity() {
                 result.success(null)
             }
 
-            "state" -> result.success(VpnBus.state.toMap())
+            "state" -> {
+                val map = VpnBus.state.toMap().toMutableMap()
+                if (VpnBus.state is VpnState.Connected) {
+                    StartSpec.load(this)?.let {
+                        map["socksPort"] = it.socksPort
+                        map["httpPort"] = it.httpPort
+                        map["user"] = it.user
+                        map["pass"] = it.pass
+                    }
+                }
+                result.success(map)
+            }
 
             "measure" -> {
                 val config = call.argument<String>("config")!!
