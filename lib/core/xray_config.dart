@@ -18,6 +18,8 @@ const dnsServers = {'cloud': '1.1.1.1', 'google': '8.8.8.8', 'quad': '9.9.9.9'};
 List<String> dnsOrder(String preferred) =>
     [preferred, ...dnsServers.keys.where((k) => k != preferred)].where(dnsServers.containsKey).toList();
 
+const fragmentTag = 'fragment';
+
 class XrayConfig {
   static const _privateCidrs = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8', '169.254.0.0/16'];
 
@@ -29,9 +31,20 @@ class XrayConfig {
     bool forTest = false,
     bool encryptedDns = true,
     String dns = 'cloud',
+    bool fragment = false,
+    bool xrayTun = false,
+    int mtu = 1500,
   }) {
     final provider = node.isJson ? jsonDecode(node.raw) as Map<String, dynamic> : null;
+    final frag = fragment && node.canFragment;
     final proxies = provider != null ? List<dynamic>.from(provider['outbounds'] as List) : [_outbound(node)];
+    if (frag) {
+      // Фрагментация TLS ClientHello: ТСПУ хуже узнаёт рукопожатие. Как в Happ — по умолчанию.
+      final proxy = proxies.first as Map<String, dynamic>;
+      final stream = Map<String, dynamic>.from((proxy['streamSettings'] as Map?) ?? const {});
+      stream['sockopt'] = {...?(stream['sockopt'] as Map?), 'dialerProxy': fragmentTag};
+      proxies[0] = {...proxy, 'streamSettings': stream};
+    }
     final providerRouting = provider?['routing'] as Map?;
     final balancers = providerRouting?['balancers'] as List?;
     final config = <String, dynamic>{
@@ -39,7 +52,19 @@ class XrayConfig {
     };
     if (!forTest) {
       if (local == null) throw ArgumentError('нужен локальный вход');
+      const sniffing = {
+        'enabled': true,
+        'destOverride': ['http', 'tls', 'quic'],
+        'routeOnly': true,
+      };
       config['inbounds'] = [
+        if (xrayTun)
+          {
+            'tag': 'tun',
+            'protocol': 'tun',
+            'settings': {'name': 'xray0', 'mtu': mtu},
+            'sniffing': sniffing,
+          },
         {
           'tag': 'socks',
           'listen': '127.0.0.1',
@@ -71,6 +96,11 @@ class XrayConfig {
           },
         },
       ];
+      // Счётчики трафика для уведомления и экрана (QueryAllOutboundTrafficStats).
+      config['stats'] = <String, dynamic>{};
+      config['policy'] = {
+        'system': {'statsOutboundUplink': true, 'statsOutboundDownlink': true},
+      };
       config['dns'] = {
         'servers': [
           for (final s in dnsOrder(dns))
@@ -86,6 +116,14 @@ class XrayConfig {
     }
     config['outbounds'] = [
       ...proxies,
+      if (frag)
+        {
+          'tag': fragmentTag,
+          'protocol': 'freedom',
+          'settings': {
+            'fragment': {'packets': 'tlshello', 'length': '100-200', 'interval': '10-20'},
+          },
+        },
       {'tag': 'direct', 'protocol': 'freedom'},
       {'tag': 'block', 'protocol': 'blackhole'},
       if (!forTest && encryptedDns) {'tag': 'dns-out', 'protocol': 'dns'},
@@ -98,7 +136,7 @@ class XrayConfig {
           if (encryptedDns)
             {
               'type': 'field',
-              'inboundTag': ['socks'],
+              'inboundTag': ['socks', 'tun'],
               'port': '53',
               'outboundTag': 'dns-out',
             },

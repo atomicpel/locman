@@ -130,6 +130,9 @@ class AppState extends ChangeNotifier {
   bool autoConnect = false;
   bool hideInsecure = true;
   bool hideDupes = false;
+  bool fragment = true;
+  String tunEngine = 'xray';
+  Set<String> noFrag = {};
   String? pinnedId;
   String? lastNodeId;
   Set<String> excludes = {};
@@ -226,7 +229,8 @@ class AppState extends ChangeNotifier {
     try {
       final wanted = info!.smokeSkin;
       if (wanted != null) skin = Skin.values.firstWhere((s) => s.name == wanted, orElse: () => skin);
-      say('start xray=${info!.xray} version=${info!.versionName}');
+      if (info!.smokeTun != null) tunEngine = info!.smokeTun == 'hev' ? 'hev' : 'xray';
+      say('start xray=${info!.xray} version=${info!.versionName} tun=$tunEngine fragment=$fragment');
       if (!onboarded) {
         onboarded = true;
         publicOn = true;
@@ -247,7 +251,7 @@ class AppState extends ChangeNotifier {
       final n = nodeById(activeId);
       if (phase == Phase.on && n != null) {
         say('connected ${n.title} ${n.protocol.title}/${n.transportLabel} kind=${detected?.name}');
-        say('probe ${await Net.probeTunnel()}');
+        say('probe ${await Net.probeTunnel()} noFrag=${noFrag.length}');
         String ip(String body) =>
             RegExp(r'^ip=(.+)$', multiLine: true).firstMatch(body)?.group(1) ?? '?';
         try {
@@ -326,6 +330,9 @@ class AppState extends ChangeNotifier {
     autoConnect = pick('autoConnect', false);
     hideInsecure = pick('hideInsecure', true);
     hideDupes = pick('hideDupes', false);
+    fragment = pick('fragment', true);
+    tunEngine = j['tunEngine'] == 'hev' ? 'hev' : 'xray';
+    noFrag = ((j['noFrag'] as List?) ?? const []).map((e) => e.toString()).toSet();
     pinnedId = j['pinnedId'] as String?;
     lastNodeId = j['lastNodeId'] as String?;
     excludes = ((j['excludes'] as List?) ?? const []).map((e) => e.toString()).toSet();
@@ -359,6 +366,9 @@ class AppState extends ChangeNotifier {
         'autoConnect': autoConnect,
         'hideInsecure': hideInsecure,
         'hideDupes': hideDupes,
+        'fragment': fragment,
+        'tunEngine': tunEngine,
+        'noFrag': noFrag.take(800).toList(),
         'pinnedId': pinnedId,
         'lastNodeId': lastNodeId,
         'excludes': excludes.toList(),
@@ -432,6 +442,8 @@ class AppState extends ChangeNotifier {
   void setAutoConnect(bool v) => _set(() => autoConnect = v);
   void setHideInsecure(bool v) => _set(() => hideInsecure = v);
   void setHideDupes(bool v) => _set(() => hideDupes = v);
+  void setFragment(bool v) => _set(() => fragment = v);
+  void setTunEngine(String v) => _set(() => tunEngine = v);
   void setQuery(String q) {
     query = q;
     notifyListeners();
@@ -461,6 +473,8 @@ class AppState extends ChangeNotifier {
       autoConnect = false;
       hideInsecure = true;
       hideDupes = false;
+      fragment = true;
+      tunEngine = 'xray';
       pinnedId = null;
       excludes.clear();
       enabledOverrides.clear();
@@ -796,10 +810,20 @@ class AppState extends ChangeNotifier {
     await files?.writeJson('health.json', {for (final e in health.entries) e.key: e.value.toJson()});
   }
 
-  String _testConfig(ProxyNode n) => XrayConfig.build(n, forTest: true, dns: dns);
+  bool _fragFor(ProxyNode n) => fragment && n.canFragment && !noFrag.contains(n.id);
+
+  String _testConfig(ProxyNode n, {required bool frag}) => XrayConfig.build(n, forTest: true, dns: dns, fragment: frag);
 
   /// Настоящая проверка: запрос через узел силами Xray; для Hysteria2 и JSON — только так.
-  Future<int> _realTest(ProxyNode n) => Native.measure(_testConfig(n), testUrl);
+  /// С фрагментацией не прошёл — пробуем без неё и запоминаем, что этому узлу она мешает.
+  Future<int> _realTest(ProxyNode n) async {
+    final frag = _fragFor(n);
+    final d = await Native.measure(_testConfig(n, frag: frag), testUrl);
+    if (d > 0 || !frag) return d;
+    final plain = await Native.measure(_testConfig(n, frag: false), testUrl);
+    if (plain > 0) noFrag.add(n.id);
+    return plain;
+  }
 
   Future<int> _testOne(ProxyNode n) async {
     if (!n.coreOnly) {
@@ -1043,7 +1067,25 @@ class AppState extends ChangeNotifier {
       user: Net.token(12),
       pass: Net.token(24),
     );
-    final config = XrayConfig.build(n, local: local, directRu: directRu, dns: dns);
+    // Адрес сервера ищем через DoH и берём самый быстрый IP — как Happ.
+    var target = n;
+    if (n.needsResolve) {
+      final ips = (await Net.resolveDoh(n.address)).take(4).toList();
+      if (cancelled()) return false;
+      if (ips.length == 1 || (ips.isNotEmpty && n.coreOnly)) {
+        target = n.withAddress(ips.first);
+      } else if (ips.length > 1) {
+        final pings = await Future.wait(ips.map((ip) => Net.tcping(ip, n.port)));
+        var best = -1;
+        for (var i = 0; i < ips.length; i++) {
+          if (pings[i] > 0 && (best < 0 || pings[i] < pings[best])) best = i;
+        }
+        target = n.withAddress(ips[best < 0 ? 0 : best]);
+      }
+    }
+    final xrayTun = tunEngine == 'xray';
+    final config = XrayConfig.build(target,
+        local: local, directRu: directRu, dns: dns, fragment: _fragFor(n), xrayTun: xrayTun);
     final bypass = {...excludes, if (directRu) ...directApps}.toList();
     final waiter = Native.events().where((e) => e is VpnStatus && e.phase != 'connecting').first;
     try {
@@ -1056,6 +1098,7 @@ class AppState extends ChangeNotifier {
         user: local.user,
         pass: local.pass,
         bypass: bypass,
+        tunMode: tunEngine,
       );
     } catch (e) {
       log('Служба VPN не запустилась: ${_short(e)}');

@@ -146,6 +146,7 @@ jobs:
       # Отчёт и APK последней сборки — ещё и в ветку ci-build: их удобно забирать без входа в Actions.
       - name: Ветка ci-build
         if: always() && github.ref == 'refs/heads/main'
+        continue-on-error: true
         run: |
           OUT="$RUNNER_TEMP/ci-build"
           mkdir -p "$OUT"
@@ -158,7 +159,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -q -m "Сборка ${{ github.run_number }}"
-          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:ci-build
+          for i in 1 2 3; do
+            git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:ci-build && break
+            sleep 10
+          done
 
       - uses: actions/upload-artifact@v4
         with:
@@ -264,6 +268,7 @@ jobs:
 
       - name: Результаты в ветку ci-smoke
         if: always()
+        continue-on-error: true
         run: |
           OUT="$RUNNER_TEMP/ci-smoke"
           mkdir -p "$OUT"
@@ -275,4 +280,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -q -m "Проверка ${{ github.run_number }}"
-          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:ci-smoke
+          for i in 1 2 3; do
+            git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:ci-smoke && break
+            sleep 10
+          done

@@ -199,6 +199,21 @@ class _LinkPageState extends State<_LinkPage> with WidgetsBindingObserver {
           line: 'Открыли «Лоцман» — он сам прокладывает ход.',
           control: PillSwitch(on: s.autoConnect, onChanged: s.setAutoConnect),
         ),
+        const SizedBox(height: 16),
+        const SectionTitle('Движок туннеля'),
+        const SizedBox(height: 8),
+        Segment<String>(
+          value: s.tunEngine,
+          onChanged: s.setTunEngine,
+          options: const [('xray', 'TUN в Xray'), ('hev', 'hev + SOCKS5')],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          s.tunEngine == 'xray'
+              ? 'Ядро Xray само читает трафик телефона — меньше звеньев, как в Happ.'
+              : 'Запасной вариант, как в Farvater: TUN → hev-socks5-tunnel → SOCKS5 → Xray.',
+          style: p.text(14, color: p.muted),
+        ),
         const SizedBox(height: 24),
         const SectionTitle(
           'Работа в фоне',
@@ -385,6 +400,13 @@ class _SafePage extends StatelessWidget {
           title: 'Скрывать небезопасные',
           line: 'Узлы без шифрования, без проверки сертификата и со старым шифрованием не попадают в список.',
           control: PillSwitch(on: s.hideInsecure, onChanged: s.setHideInsecure),
+        ),
+        const SizedBox(height: 12),
+        SettingRow(
+          title: 'Фрагментация TLS',
+          line: 'Первый пакет рукопожатия режется на куски, и фильтр оператора хуже его узнаёт. '
+              'Если узлу это мешает, «Лоцман» сам отключит её для него.',
+          control: PillSwitch(on: s.fragment, onChanged: s.setFragment),
         ),
         const SizedBox(height: 16),
         const SectionTitle('DNS по HTTPS', line: 'Запросы имён идут зашифрованными через узел — провайдер их не видит.'),

@@ -228,6 +228,39 @@ class Net {
     }
   }
 
+  /// IPv4 домена через DNS-over-HTTPS — мимо подменённого DNS оператора.
+  static Future<List<String>> resolveDoh(String host) async {
+    final name = Uri.encodeQueryComponent(host);
+    final urls = [
+      'https://1.1.1.1/dns-query?name=$name&type=A',
+      'https://dns.google/resolve?name=$name&type=A',
+      'https://9.9.9.9:5053/dns-query?name=$name&type=A',
+    ];
+    for (final url in urls) {
+      final client = _client(viaTunnel: false, timeout: const Duration(seconds: 4));
+      try {
+        final req = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 5));
+        req.headers.set(HttpHeaders.acceptHeader, 'application/dns-json');
+        final resp = await req.close().timeout(const Duration(seconds: 5));
+        final body = await resp.transform(utf8.decoder).join().timeout(const Duration(seconds: 5));
+        final j = jsonDecode(body);
+        final answers = (j is Map ? j['Answer'] : null) as List?;
+        final ips = (answers ?? const [])
+            .whereType<Map>()
+            .where((a) => a['type'] == 1)
+            .map((a) => a['data'].toString())
+            .where((ip) => InternetAddress.tryParse(ip) != null)
+            .toList();
+        if (ips.isNotEmpty) return ips;
+      } catch (_) {
+        // следующий сервер
+      } finally {
+        client.close(force: true);
+      }
+    }
+    return const [];
+  }
+
   /// Свободный локальный порт для входов Xray.
   static Future<int> freePort() async {
     final s = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);

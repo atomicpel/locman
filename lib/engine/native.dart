@@ -46,7 +46,8 @@ class Traffic {
 
 class NativeInfo {
   NativeInfo(this.filesDir, this.cacheDir, this.versionName, this.versionCode, this.xray, this.abis,
-      {this.smoke = false, this.smokeSkin});
+      {this.smoke = false, this.smokeSkin, this.smokeTun});
+  final String? smokeTun;
   final bool smoke;
   final String? smokeSkin;
   final List<String> abis;
@@ -95,6 +96,7 @@ class Native {
       ((m['abis'] as List?) ?? const []).map((e) => e.toString()).toList(),
       smoke: m['smoke'] == true,
       smokeSkin: m['skin'] as String?,
+      smokeTun: m['tun'] as String?,
     );
   }
 
@@ -111,6 +113,7 @@ class Native {
     required String user,
     required String pass,
     required List<String> bypass,
+    String tunMode = 'xray',
     int mtu = 1500,
   }) =>
       _core.invokeMethod('start', {
@@ -123,6 +126,7 @@ class Native {
         'pass': pass,
         'bypass': bypass,
         'mtu': mtu,
+        'tunMode': tunMode,
       });
 
   static Future<void> stop() => _core.invokeMethod('stop');

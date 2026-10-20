@@ -54,15 +54,33 @@ object XrayEngine {
     val isRunning: Boolean get() = controller != null
 
     @Synchronized
-    fun start(config: String): Result<Unit> = runCatching {
+    fun start(config: String, tunFd: Int = 0): Result<Unit> = runCatching {
         ready.await(10, TimeUnit.SECONDS)
         check(isAvailable) { "ядро Xray не встроено в сборку" }
         stop()
-        controller = launch(config)
+        controller = launch(config, tunFd)
         lastError = null
     }.onFailure { lastError = (it.cause ?: it).message }
 
-    private fun launch(config: String): Any {
+    /** Байты через все выходы с прошлого вызова: (вверх, вниз). Нужен "stats" в конфиге. */
+    fun trafficDelta(): Pair<Long, Long> {
+        val c = controller ?: return 0L to 0L
+        val text = runCatching {
+            c.javaClass.methods.firstOrNull { it.name == "queryAllOutboundTrafficStats" }?.invoke(c) as? String
+        }.getOrNull().orEmpty()
+        var up = 0L
+        var down = 0L
+        text.split(';').forEach { item ->
+            val parts = item.split(',')
+            if (parts.size == 3) {
+                val v = parts[2].toLongOrNull() ?: 0L
+                if (parts[1] == "uplink") up += v else if (parts[1] == "downlink") down += v
+            }
+        }
+        return up to down
+    }
+
+    private fun launch(config: String, tunFd: Int): Any {
         val handlerClass = Class.forName(CALLBACK)
         val handler = Proxy.newProxyInstance(handlerClass.classLoader, arrayOf(handlerClass)) { proxy, method, args ->
             when (method.name) {
@@ -80,8 +98,11 @@ object XrayEngine {
         val ctrl = libMethod("newCoreController")?.invoke(null, handler) ?: error("newCoreController недоступен")
         val startLoop = ctrl.javaClass.methods.first { it.name == "startLoop" }
         when (startLoop.parameterCount) {
-            1 -> startLoop.invoke(ctrl, config)
-            2 -> startLoop.invoke(ctrl, config, 0)
+            1 -> {
+                check(tunFd == 0) { "эта версия ядра не умеет TUN" }
+                startLoop.invoke(ctrl, config)
+            }
+            2 -> startLoop.invoke(ctrl, config, tunFd)
             else -> error("неизвестная сигнатура startLoop")
         }
         return ctrl

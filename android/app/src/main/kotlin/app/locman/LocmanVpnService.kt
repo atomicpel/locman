@@ -72,9 +72,12 @@ class LocmanVpnService : VpnService() {
         teardown(closeTun = false)
         VpnBus.set(VpnState.Connecting(spec.name, spec.nodeId))
 
-        XrayEngine.start(spec.config).onFailure {
-            runCatching { previous?.close() }
-            return fail("Ядро не запустилось: ${it.message}")
+        val xrayTun = spec.tunMode == "xray"
+        if (!xrayTun) {
+            XrayEngine.start(spec.config).onFailure {
+                runCatching { previous?.close() }
+                return fail("Ядро не запустилось: ${it.message}")
+            }
         }
 
         val builder = Builder()
@@ -94,22 +97,38 @@ class LocmanVpnService : VpnService() {
         if (fd == null) return fail("Нет разрешения на VPN")
         tun = fd
 
-        TunBridge.start(this, fd.fd, spec.mtu, spec.socksPort, spec.user, spec.pass).onFailure {
-            return fail("TUN не запустился: ${it.message}")
+        if (xrayTun) {
+            XrayEngine.start(spec.config, fd.fd).onFailure {
+                return fail("Ядро не запустилось: ${it.message}")
+            }
+        } else {
+            TunBridge.start(this, fd.fd, spec.mtu, spec.socksPort, spec.user, spec.pass).onFailure {
+                return fail("TUN не запустился: ${it.message}")
+            }
         }
         val since = System.currentTimeMillis()
         VpnBus.set(VpnState.Connected(spec.name, spec.nodeId, since))
         StartSpec.setWasOn(this, true)
         update(spec.name, "Подключено")
-        startMonitor(spec.name)
+        startMonitor(spec.name, xrayTun)
     }
 
-    private fun startMonitor(name: String) {
+    private fun startMonitor(name: String, xrayTun: Boolean) {
         var base: LongArray? = null
         var lastUp = -1L
         var lastDown = -1L
         var tick = 0
+        var sumUp = 0L
+        var sumDown = 0L
         monitor = worker.scheduleWithFixedDelay({
+            if (xrayTun) {
+                val (up, down) = XrayEngine.trafficDelta()
+                sumUp += up
+                sumDown += down
+                VpnBus.traffic(up, down, sumUp, sumDown)
+                if (tick++ % 5 == 0) update(name, "↓ ${rate(down)}   ↑ ${rate(up)}   за сеанс ${bytes(sumUp + sumDown)}")
+                return@scheduleWithFixedDelay
+            }
             val s = TunBridge.stats()?.takeIf { it.size >= 4 } ?: return@scheduleWithFixedDelay
             val b = base ?: longArrayOf(s[1], s[3]).also { base = it }
             val upTotal = (s[1] - b[0]).coerceAtLeast(0)

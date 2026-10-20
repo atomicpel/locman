@@ -109,6 +109,39 @@ class ProxyNode {
   /// Узлы, которые нельзя проверить простым TCP-подключением.
   bool get coreOnly => protocol == Protocol.hysteria2 || isJson;
 
+  /// Можно ли резать TLS ClientHello на куски (фрагментация против DPI).
+  bool get canFragment =>
+      !isJson &&
+      protocol != Protocol.hysteria2 &&
+      protocol != Protocol.shadowsocks &&
+      (security == 'tls' || security == 'reality' || (protocol == Protocol.trojan && security.isEmpty));
+
+  bool get _isIp => RegExp(r'^[\d.]+$').hasMatch(address) || address.contains(':');
+
+  /// Нужно ли заранее искать IP сервера (адрес — домен).
+  bool get needsResolve => !isJson && !_isIp;
+
+  /// Тот же узел, но с уже найденным IP; домен остаётся в SNI и Host,
+  /// чтобы рукопожатие не изменилось.
+  ProxyNode withAddress(String ip) {
+    final p = Map<String, String>.from(params);
+    String v(String k) => (p[k] ?? '').trim();
+    final tlsLike = security == 'tls' || security == 'reality' || protocol == Protocol.trojan || protocol == Protocol.hysteria2;
+    if (tlsLike && v('sni').isEmpty && v('peer').isEmpty && v('host').isEmpty) p['sni'] = address;
+    if (v('host').isEmpty && const {'ws', 'httpupgrade', 'xhttp', 'splithttp'}.contains(transport)) p['host'] = address;
+    return ProxyNode(
+      id: id,
+      protocol: protocol,
+      name: name,
+      address: ip,
+      port: port,
+      secret: secret,
+      params: p,
+      raw: raw,
+      sourceId: sourceId,
+    );
+  }
+
   /// Ключ «одинакового» узла для скрытия дублей.
   String get endpointKey => isJson ? id : '${protocol.name}/${address.toLowerCase()}/$port';
 

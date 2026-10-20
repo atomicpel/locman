@@ -11,11 +11,11 @@ adb shell appops set $PKG ACTIVATE_VPN allow
 adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null || true
 adb logcat -c
 
-run() {   # run SKIN PREFIX
-  local skin="$1" prefix="$2"
+run() {   # run SKIN PREFIX TUN
+  local skin="$1" prefix="$2" tun="$3"
   adb shell am force-stop $PKG
   adb logcat -c
-  adb shell am start -n $PKG/.MainActivity --ez smoke true --es skin "$skin"
+  adb shell am start -n $PKG/.MainActivity --ez smoke true --es skin "$skin" --es tun "$tun"
   local deadline=$((SECONDS + 420)) seen=""
   while [ $SECONDS -lt $deadline ]; do
     adb logcat -d -s flutter:I > "$OUT/$prefix-log.txt" 2>/dev/null
@@ -30,9 +30,9 @@ run() {   # run SKIN PREFIX
   grep 'SMOKE:' "$OUT/$prefix-log.txt"
 }
 
-run glass glass
+run glass glass xray
 adb shell dumpsys connectivity | grep -i -m5 'VPN' > "$OUT/vpn.txt" || true
 adb logcat -d > "$OUT/logcat-full.txt"
-run island island
-run paper paper
-grep -q 'SMOKE: connected' "$OUT/glass-log.txt" && grep -q 'SMOKE: probe true' "$OUT/glass-log.txt"
+run island island hev
+run paper paper xray
+grep -q 'SMOKE: probe true' "$OUT/glass-log.txt" && grep -q 'SMOKE: probe true' "$OUT/island-log.txt"

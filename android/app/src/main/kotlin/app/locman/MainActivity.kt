@@ -86,6 +86,7 @@ class MainActivity : FlutterActivity() {
                         "abis" to Build.SUPPORTED_ABIS.toList(),
                         "smoke" to (intent?.getBooleanExtra("smoke", false) ?: false),
                         "skin" to intent?.getStringExtra("skin"),
+                        "tun" to intent?.getStringExtra("tun"),
                     )
                 }
             }
@@ -126,6 +127,7 @@ class MainActivity : FlutterActivity() {
                     pass = call.argument<String>("pass")!!,
                     bypass = call.argument<List<String>>("bypass") ?: emptyList(),
                     mtu = call.argument<Int>("mtu") ?: 1500,
+                    tunMode = call.argument<String>("tunMode") ?: "xray",
                 )
                 try {
                     LocmanVpnService.start(this, spec)

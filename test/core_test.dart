@@ -184,4 +184,35 @@ void main() {
     expect(LinkParser.parse('trojan://p@1.2.3.4:443#[FI] fast')!.place.code, 'FI');
     expect(LinkParser.parse('trojan://p@1.2.3.4:443#node')!.place.code, isNull);
   });
+
+  test('фрагментация: отдельный выход и dialerProxy, не для Hysteria2', () {
+    final c = jsonDecode(XrayConfig.build(LinkParser.parse(vless)!, local: local, fragment: true)) as Map;
+    final outs = (c['outbounds'] as List).cast<Map>();
+    expect(outs.map((o) => o['tag']), contains('fragment'));
+    expect(((outs.first['streamSettings'] as Map)['sockopt'] as Map)['dialerProxy'], 'fragment');
+    final hy = XrayConfig.build(LinkParser.parse('hy2://p@hy.example.com:443?sni=x#n')!, local: local, fragment: true);
+    expect(hy.contains('dialerProxy'), isFalse);
+  });
+
+  test('TUN в Xray и счётчики трафика', () {
+    final c = jsonDecode(XrayConfig.build(LinkParser.parse(vless)!, local: local, xrayTun: true)) as Map;
+    final inbounds = (c['inbounds'] as List).cast<Map>();
+    expect(inbounds.first['protocol'], 'tun');
+    expect(c.containsKey('stats'), isTrue);
+    final dnsRule = ((c['routing'] as Map)['rules'] as List).cast<Map>().first;
+    expect(dnsRule['inboundTag'], ['socks', 'tun']);
+  });
+
+  test('найденный IP сохраняет домен в SNI и Host', () {
+    final ws = LinkParser.parse('vless://u@cdn.example.com:443?security=tls&type=ws&path=%2Fws#x')!;
+    expect(ws.needsResolve, isTrue);
+    final r = ws.withAddress('1.2.3.4');
+    expect(r.address, '1.2.3.4');
+    expect(r.params['host'], 'cdn.example.com');
+    expect(r.id, ws.id);
+    final reality = LinkParser.parse(vless)!;
+    expect(reality.needsResolve, isFalse);
+    final named = LinkParser.parse('trojan://p@srv.example.com:443?sni=front.example.com#t')!.withAddress('5.6.7.8');
+    expect(named.params['sni'], 'front.example.com');
+  });
 }

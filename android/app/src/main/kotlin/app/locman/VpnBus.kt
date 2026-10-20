@@ -19,11 +19,13 @@ data class StartSpec(
     val pass: String,
     val bypass: List<String>,
     val mtu: Int,
+    /** "xray" — TUN читает само ядро Xray; "hev" — через hev-socks5-tunnel и SOCKS5. */
+    val tunMode: String = "xray",
 ) {
     fun toJson(): String = JSONObject()
         .put("config", config).put("name", name).put("nodeId", nodeId)
         .put("socksPort", socksPort).put("httpPort", httpPort).put("user", user).put("pass", pass)
-        .put("bypass", JSONArray(bypass)).put("mtu", mtu)
+        .put("bypass", JSONArray(bypass)).put("mtu", mtu).put("tunMode", tunMode)
         .toString()
 
     companion object {
@@ -49,6 +51,7 @@ data class StartSpec(
                 pass = j.getString("pass"),
                 bypass = (0 until bypass.length()).map { bypass.getString(it) },
                 mtu = j.optInt("mtu", 1500),
+                tunMode = j.optString("tunMode", "xray"),
             )
         }.getOrNull()
 
