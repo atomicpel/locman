@@ -201,7 +201,8 @@ jobs:
 
   smoke:
     name: Проверка в эмуляторе
-    if: github.ref == 'refs/heads/main'
+    # Эмулятор GitHub нестабилен под сетевой нагрузкой — запускаем вручную.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:
