@@ -246,6 +246,13 @@ class AppState extends ChangeNotifier {
       final wanted = info!.smokeSkin;
       if (wanted != null) skin = Skin.values.firstWhere((s) => s.name == wanted, orElse: () => skin);
       probe = 'gentle';
+      _smokeSink = say;
+      var beats = 0;
+      Timer.periodic(const Duration(seconds: 5), (t) {
+        beats++;
+        say('beat $beats phase=${phase.name} step=$seekStep checking=$checkingDone');
+        if (phase == Phase.on || phase == Phase.fail || beats > 120) t.cancel();
+      });
       if (info!.smokeTun != null) tunEngine = info!.smokeTun == 'hev' ? 'hev' : 'xray';
       say('start xray=${info!.xray} version=${info!.versionName} tun=$tunEngine fragment=$fragment');
       if (!onboarded) {
@@ -409,7 +416,11 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// В режиме самопроверки журнал дублируется в файл.
+  void Function(String)? _smokeSink;
+
   void log(String text) {
+    _smokeSink?.call('log $text');
     journal.insert(0, JournalEntry(DateTime.now().millisecondsSinceEpoch, text));
     if (journal.length > 40) journal.removeRange(40, journal.length);
     _save();
@@ -1057,6 +1068,7 @@ class AppState extends ChangeNotifier {
 
     seekStep = 2;
     notifyListeners();
+    _smokeSink?.call('seek pool=${pool.length}');
     final tcp = <ProxyNode, int>{};
     await _pool(pool, 48, (n) async {
       if (cancelled()) return;
@@ -1069,10 +1081,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     final alive = tcp.entries.where((e) => e.value >= 0).toList()..sort((a, b) => a.value.compareTo(b.value));
     final shortlist = alive.take(24).map((e) => e.key).toList();
+    _smokeSink?.call('tcp alive=${alive.length} shortlist=${shortlist.length}');
     final real = <ProxyNode, int>{};
     await _pool(shortlist, probeMeta[probe]!.$2, (n) async {
       if (cancelled()) return;
+      _smokeSink?.call('measure ${n.protocol.title} ${n.transportLabel} ${n.address}');
       final d = await _realTest(n);
+      _smokeSink?.call('measured ${n.address} = $d');
       _record(n.id, d, real: true);
       if (d > 0) real[n] = d;
     });
@@ -1109,6 +1124,7 @@ class AppState extends ChangeNotifier {
     final config = XrayConfig.build(target,
         local: local, directRu: directRu, dns: dns, fragment: _fragFor(n), xrayTun: xrayTun);
     final bypass = {...excludes, if (directRu) ...directApps}.toList();
+    _smokeSink?.call('bring ${target.address} tun=$tunEngine');
     final waiter = Native.events().where((e) => e is VpnStatus && e.phase != 'connecting').first;
     try {
       await Native.start(
