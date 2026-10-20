@@ -1,0 +1,243 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+
+import '../core/catalog.dart';
+import '../core/xray_config.dart';
+
+class HttpResult {
+  HttpResult(this.status, this.body, this.headers);
+  final int status;
+  final String body;
+  final Map<String, String> headers;
+}
+
+/// Сеть самого приложения. Приложение исключено из туннеля, поэтому
+/// «напрямую» — это действительно напрямую, а «через узел» идёт через HTTP-вход Xray.
+class Net {
+  static const userAgent = 'Locman/1';
+  static const maxBody = 8 * 1024 * 1024;
+
+  /// Локальный вход Xray, пока туннель поднят.
+  static LocalProxy? tunnel;
+
+  static HttpClient _client({required bool viaTunnel, Duration timeout = const Duration(seconds: 10)}) {
+    final c = HttpClient()
+      ..connectionTimeout = timeout
+      ..idleTimeout = const Duration(seconds: 5)
+      ..userAgent = userAgent
+      ..autoUncompress = true;
+    final t = tunnel;
+    if (viaTunnel && t != null) {
+      c.findProxy = (_) => 'PROXY ${t.user}:${t.pass}@127.0.0.1:${t.httpPort}';
+    } else {
+      c.findProxy = (_) => 'DIRECT';
+    }
+    return c;
+  }
+
+  /// Порядок попыток: через узел (если поднят), затем напрямую.
+  static List<bool> get routes => tunnel != null ? const [true, false] : const [false];
+
+  static Future<HttpResult> get(
+    String url, {
+    bool viaTunnel = false,
+    Duration timeout = const Duration(seconds: 25),
+    int maxBytes = maxBody,
+  }) async {
+    final uri = Uri.parse(url);
+    if (uri.scheme != 'https' && uri.scheme != 'http') throw const FormatException('нужна ссылка http(s)');
+    if (_isLocal(uri.host)) throw const FormatException('адрес указывает на сам телефон');
+    final client = _client(viaTunnel: viaTunnel);
+    Future<HttpResult> run() async {
+      final req = await client.getUrl(uri);
+      req.followRedirects = true;
+      req.maxRedirects = 5;
+      final resp = await req.close();
+      final headers = <String, String>{};
+      resp.headers.forEach((k, v) => headers[k.toLowerCase()] = v.join(', '));
+      final bytes = BytesBuilder(copy: false);
+      await for (final chunk in resp) {
+        bytes.add(chunk);
+        if (bytes.length > maxBytes) throw const HttpException('ответ больше 8 МБ');
+      }
+      return HttpResult(resp.statusCode, utf8.decode(bytes.takeBytes(), allowMalformed: true), headers);
+    }
+
+    try {
+      return await run().timeout(timeout);
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  /// Пробуем зеркала и маршруты по очереди, первый удачный ответ 200.
+  static Future<HttpResult> getAny(List<String> urls, {Duration timeout = const Duration(seconds: 25)}) async {
+    Object? last;
+    for (final via in routes) {
+      for (final url in urls) {
+        try {
+          final r = await get(url, viaTunnel: via, timeout: timeout);
+          if (r.status == 200) return r;
+          last = 'HTTP ${r.status}';
+        } catch (e) {
+          last = e;
+        }
+      }
+    }
+    throw HttpException(_humanError(last));
+  }
+
+  static Future<void> download(
+    String url,
+    File target, {
+    void Function(double)? onProgress,
+    bool viaTunnel = false,
+  }) async {
+    final client = _client(viaTunnel: viaTunnel, timeout: const Duration(seconds: 20));
+    try {
+      final req = await client.getUrl(Uri.parse(url));
+      final resp = await req.close();
+      if (resp.statusCode != 200) throw HttpException('HTTP ${resp.statusCode}');
+      final total = resp.contentLength;
+      var read = 0;
+      final sink = target.openWrite();
+      try {
+        await for (final chunk in resp.timeout(const Duration(seconds: 30))) {
+          sink.add(chunk);
+          read += chunk.length;
+          if (total > 0) onProgress?.call(read / total);
+        }
+      } finally {
+        await sink.close();
+      }
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  static bool _isLocal(String host) {
+    final h = host.toLowerCase();
+    if (h == 'localhost' || h.endsWith('.localhost')) return true;
+    final ip = InternetAddress.tryParse(h);
+    return ip != null && (ip.isLoopback || ip.isLinkLocal);
+  }
+
+  static String _humanError(Object? e) {
+    if (e == null) return 'нет ответа';
+    if (e is TimeoutException) return 'нет ответа вовремя';
+    if (e is SocketException) return 'сеть недоступна';
+    if (e is HandshakeException) return 'ошибка TLS';
+    if (e is HttpException) return e.message;
+    if (e is FormatException) return e.message;
+    return e.toString();
+  }
+
+  /// TCP-рукопожатие с сервером узла, мс или -1.
+  static Future<int> tcping(String host, int port, {Duration timeout = const Duration(milliseconds: 2500)}) async {
+    final sw = Stopwatch()..start();
+    try {
+      final s = await Socket.connect(host, port, timeout: timeout);
+      s.destroy();
+      return max(1, sw.elapsedMilliseconds);
+    } catch (_) {
+      return -1;
+    }
+  }
+
+  /// Проверка поднятого туннеля: ответ 204 через узел.
+  static Future<bool> probeTunnel({String url = 'https://www.gstatic.com/generate_204'}) async {
+    if (tunnel == null) return false;
+    final client = _client(viaTunnel: true, timeout: const Duration(seconds: 8));
+    try {
+      final req = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 10));
+      final resp = await req.close().timeout(const Duration(seconds: 10));
+      await resp.drain<void>();
+      return resp.statusCode == 204 || resp.statusCode == 200;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  /// Что за сеть сейчас: открывается зарубежное — обычные блокировки (ЧС),
+  /// открываются только российские сайты — белые списки (БС), ничего — null.
+  static Future<NetKind?> detectKind() async {
+    const foreign = [
+      'https://speed.cloudflare.com/__down?bytes=65536',
+      'https://dl.google.com/chrome/install/latest/chrome_installer.exe',
+      'https://raw.githubusercontent.com/atomicpel/locman/main/LICENSE',
+    ];
+    const domestic = ['https://ya.ru/', 'https://vk.com/', 'https://www.gosuslugi.ru/'];
+    if (await _firstTrue(foreign.map(_downloads))) return NetKind.black;
+    if (await _firstTrue(domestic.map(_reachable))) return NetKind.white;
+    return null;
+  }
+
+  static Future<bool> _firstTrue(Iterable<Future<bool>> futures) {
+    final list = futures.toList();
+    final done = Completer<bool>();
+    var left = list.length;
+    for (final f in list) {
+      f.then((ok) {
+        if (ok && !done.isCompleted) done.complete(true);
+      }).whenComplete(() {
+        left--;
+        if (left == 0 && !done.isCompleted) done.complete(false);
+      });
+    }
+    return done.future;
+  }
+
+  static Future<bool> _reachable(String url) async {
+    final client = _client(viaTunnel: false, timeout: const Duration(seconds: 4));
+    try {
+      final req = await client.headUrl(Uri.parse(url)).timeout(const Duration(seconds: 6));
+      req.followRedirects = false;
+      final resp = await req.close().timeout(const Duration(seconds: 6));
+      await resp.drain<void>();
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  static Future<bool> _downloads(String url) async {
+    const enough = 32 * 1024;
+    final client = _client(viaTunnel: false, timeout: const Duration(seconds: 4));
+    try {
+      final req = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 6));
+      req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-65535');
+      final resp = await req.close().timeout(const Duration(seconds: 6));
+      if (resp.statusCode != 200 && resp.statusCode != 206) return false;
+      var total = 0;
+      await for (final chunk in resp.timeout(const Duration(seconds: 6))) {
+        total += chunk.length;
+        if (total >= enough) break;
+      }
+      return total >= enough;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  /// Свободный локальный порт для входов Xray.
+  static Future<int> freePort() async {
+    final s = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final port = s.port;
+    await s.close();
+    return port;
+  }
+
+  static String token(int length) {
+    const alphabet = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final r = Random.secure();
+    return List.generate(length, (_) => alphabet[r.nextInt(alphabet.length)]).join();
+  }
+}

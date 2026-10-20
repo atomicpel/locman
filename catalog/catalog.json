@@ -1,0 +1,760 @@
+{
+ "version": 1,
+ "generatedAt": "2026-10-20T18:24:48+00:00",
+ "sources": [
+  {
+   "id": "zieng2-universal",
+   "title": "WL Universal",
+   "author": "zieng2",
+   "homepage": "https://github.com/zieng2/wl",
+   "license": "не указана",
+   "description": "Полный список под белые списки, есть российские зеркала.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/zieng2/wl/main/vless_universal.txt",
+    "https://codeberg.org/zieng2/wl/raw/branch/main/vless_universal.txt",
+    "https://gitlab.com/zieng2/wl/raw/main/vless_universal.txt",
+    "https://hub.mos.ru/zieng2/wl/raw/main/list_universal.txt",
+    "https://gitverse.ru/api/repos/zieng2/wl/raw/branch/master/list_universal.txt"
+   ],
+   "origin": "curated",
+   "status": "ok",
+   "error": null,
+   "nodes": 105,
+   "secure": 105,
+   "protocols": {
+    "vless": 105
+   },
+   "alive": null,
+   "hash": "b7876d19ab6a5ee7",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "rjsxrd-bypass",
+   "title": "rjsxrd",
+   "author": "whoahaow",
+   "homepage": "https://github.com/whoahaow/rjsxrd",
+   "license": "MIT",
+   "description": "Конфиги для обхода по SNI и подсетям, обновление ежечасно.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/whoahaow/rjsxrd/main/githubmirror/bypass/bypass-all.txt",
+    "https://cdn.jsdelivr.net/gh/whoahaow/rjsxrd@main/githubmirror/bypass/bypass-all.txt"
+   ],
+   "origin": "curated",
+   "status": "ok",
+   "error": null,
+   "nodes": 972,
+   "secure": 972,
+   "protocols": {
+    "ss": 46,
+    "vless": 893,
+    "vmess": 17,
+    "trojan": 11,
+    "hysteria2": 5
+   },
+   "alive": null,
+   "hash": "df95f7845a1ba3e2",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "igareck-white-mobile",
+   "title": "igareck: белые списки (мобильный)",
+   "author": "igareck",
+   "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+   "license": "GPL-3.0",
+   "description": "VLESS Reality, проверенные на мобильных сетях с белыми списками.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+    "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+    "https://gitlab.com/igareck/vpn-configs-for-russia/-/raw/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
+   ],
+   "origin": "curated",
+   "status": "ok",
+   "error": null,
+   "nodes": 45,
+   "secure": 45,
+   "protocols": {
+    "vless": 45
+   },
+   "alive": null,
+   "hash": "d5ec6cd34f61f887",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "igareck-white-cidr",
+   "title": "igareck: белые подсети",
+   "author": "igareck",
+   "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+   "license": "GPL-3.0",
+   "description": "Серверы на адресах из белых подсетей, только проверенные.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-CIDR-RU-checked.txt",
+    "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/WHITE-CIDR-RU-checked.txt",
+    "https://gitlab.com/igareck/vpn-configs-for-russia/-/raw/main/WHITE-CIDR-RU-checked.txt"
+   ],
+   "origin": "curated",
+   "status": "ok",
+   "error": null,
+   "nodes": 5,
+   "secure": 5,
+   "protocols": {
+    "vless": 5
+   },
+   "alive": null,
+   "hash": "3383368fd281d8b2",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "igareck-white-sni",
+   "title": "igareck: белые SNI",
+   "author": "igareck",
+   "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+   "license": "GPL-3.0",
+   "description": "Серверы, которые маскируются под сайты из белого списка.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-SNI-RU-all.txt",
+    "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/WHITE-SNI-RU-all.txt"
+   ],
+   "origin": "curated",
+   "status": "empty",
+   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "nodes": 0,
+   "secure": 0,
+   "protocols": {},
+   "alive": null,
+   "hash": "ebbd00bf1b070b52",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": "2026-10-20T18:24:48+00:00",
+   "recommended": false
+  },
+  {
+   "id": "telega-ru-whitelist",
+   "title": "TelegaVPN: белые списки",
+   "author": "TelegaVPN",
+   "homepage": "https://github.com/TelegaVPN/free-vpn-keys",
+   "license": "не указана",
+   "description": "Подборка под белые списки, обновляется каждые 30 минут.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/TelegaVPN/free-vpn-keys/main/sub/v2raytun/ru-whitelist.txt",
+    "https://cdn.jsdelivr.net/gh/TelegaVPN/free-vpn-keys@main/sub/v2raytun/ru-whitelist.txt"
+   ],
+   "origin": "curated",
+   "status": "ok",
+   "error": null,
+   "nodes": 8,
+   "secure": 8,
+   "protocols": {
+    "vless": 7,
+    "vmess": 1
+   },
+   "alive": null,
+   "hash": "b906c5b55884ef42",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "rkp-wl",
+   "title": "РКП: белые списки",
+   "author": "@RKP_channel",
+   "homepage": "https://t.me/RKP_channel",
+   "license": "не указана",
+   "description": "Подписка Анти-РосКомПозор для режима белых списков.",
+   "mode": "white",
+   "mirrors": [
+    "https://hub.mos.ru/rkp/sub-roskompozor/raw/main/wl"
+   ],
+   "origin": "curated",
+   "status": "dead",
+   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "nodes": 0,
+   "secure": 0,
+   "protocols": {},
+   "alive": null,
+   "hash": null,
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": null,
+   "failingSince": "2026-10-20T18:24:48+00:00",
+   "recommended": true
+  },
+  {
+   "id": "kfwl-wl",
+   "title": "KfWL: белые списки",
+   "author": "@qkfwl",
+   "homepage": "https://t.me/KfWLRus",
+   "license": "не указана",
+   "description": "Подписка KfWL для режима белых списков.",
+   "mode": "white",
+   "mirrors": [
+    "https://hub.mos.ru/kfwl/auto/raw/main/wl"
+   ],
+   "origin": "curated",
+   "status": "dead",
+   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "nodes": 0,
+   "secure": 0,
+   "protocols": {},
+   "alive": null,
+   "hash": null,
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": null,
+   "failingSince": "2026-10-20T18:24:48+00:00",
+   "recommended": true
+  },
+  {
+   "id": "bunker-wl",
+   "title": "Бункер Кота: белые списки",
+   "author": "@K0TLUX",
+   "homepage": "https://t.me/BUNKER_KOTA",
+   "license": "не указана",
+   "description": "Подписка Бункера Кота для режима белых списков.",
+   "mode": "white",
+   "mirrors": [
+    "https://hub.mos.ru/akelladejavu/bunker/-/raw/main/WHITE_LIST.txt"
+   ],
+   "origin": "curated",
+   "status": "dead",
+   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "nodes": 0,
+   "secure": 0,
+   "protocols": {},
+   "alive": null,
+   "hash": null,
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": null,
+   "failingSince": "2026-10-20T18:24:48+00:00",
+   "recommended": true
+  },
+  {
+   "id": "igareck-black-vless",
+   "title": "igareck: VLESS",
+   "author": "igareck",
+   "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+   "license": "GPL-3.0",
+   "description": "Проверенные из России VLESS для обычных блокировок.",
+   "mode": "black",
+   "mirrors": [
+    "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt",
+    "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/BLACK_VLESS_RUS.txt",
+    "https://gitlab.com/igareck/vpn-configs-for-russia/-/raw/main/BLACK_VLESS_RUS.txt"
+   ],
+   "origin": "curated",
+   "status": "ok",
+   "error": null,
+   "nodes": 56,
+   "secure": 54,
+   "protocols": {
+    "vless": 56
+   },
+   "alive": null,
+   "hash": "de739876b1592331",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "igareck-black-mobile",
+   "title": "igareck: VLESS для мобильного",
+   "author": "igareck",
+   "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+   "license": "GPL-3.0",
+   "description": "VLESS, которые держатся на мобильном интернете.",
+   "mode": "black",
+   "mirrors": [
+    "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt",
+    "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/BLACK_VLESS_RUS_mobile.txt"
+   ],
+   "origin": "curated",
+   "status": "ok",
+   "error": null,
+   "nodes": 145,
+   "secure": 143,
+   "protocols": {
+    "vless": 58,
+    "vmess": 10,
+    "trojan": 77
+   },
+   "alive": null,
+   "hash": "ef7abdeb31c73c5d",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "igareck-black-ss",
+   "title": "igareck: Shadowsocks и другие",
+   "author": "igareck",
+   "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+   "license": "GPL-3.0",
+   "description": "Shadowsocks и остальные протоколы, проверенные из России.",
+   "mode": "black",
+   "mirrors": [
+    "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_SS+All_RUS.txt",
+    "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/BLACK_SS+All_RUS.txt"
+   ],
+   "origin": "curated",
+   "status": "ok",
+   "error": null,
+   "nodes": 84,
+   "secure": 81,
+   "protocols": {
+    "hysteria2": 2,
+    "vmess": 10,
+    "trojan": 72
+   },
+   "alive": null,
+   "hash": "faee08fcac508057",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "telega-for-russia",
+   "title": "TelegaVPN: для России",
+   "author": "TelegaVPN",
+   "homepage": "https://github.com/TelegaVPN/free-vpn-keys",
+   "license": "не указана",
+   "description": "Reality, Trojan, Hysteria2 под обычные блокировки, обновление каждые 30 минут.",
+   "mode": "black",
+   "mirrors": [
+    "https://raw.githubusercontent.com/TelegaVPN/free-vpn-keys/main/sub/v2raytun/for-russia.txt",
+    "https://cdn.jsdelivr.net/gh/TelegaVPN/free-vpn-keys@main/sub/v2raytun/for-russia.txt"
+   ],
+   "origin": "curated",
+   "status": "ok",
+   "error": null,
+   "nodes": 8,
+   "secure": 8,
+   "protocols": {
+    "vless": 7,
+    "vmess": 1
+   },
+   "alive": null,
+   "hash": "03fadc2faef5465e",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "kort-ru-sni",
+   "title": "kort0881: RU-серверы",
+   "author": "kort0881",
+   "homepage": "https://github.com/kort0881/vpn-vless-configs-russia",
+   "license": "не указана",
+   "description": "Валидные VLESS с российскими и СНГ-адресами, ежедневная ротация.",
+   "mode": "black",
+   "mirrors": [
+    "https://raw.githubusercontent.com/kort0881/vpn-vless-configs-russia/main/data/githubmirror/ru-sni/vless.txt"
+   ],
+   "origin": "curated",
+   "status": "ok",
+   "error": null,
+   "nodes": 623,
+   "secure": 574,
+   "protocols": {
+    "vless": 623
+   },
+   "alive": null,
+   "hash": "427741468984d942",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "rkp-bl",
+   "title": "РКП: чёрные списки",
+   "author": "@RKP_channel",
+   "homepage": "https://t.me/RKP_channel",
+   "license": "не указана",
+   "description": "Подписка Анти-РосКомПозор для обычных блокировок.",
+   "mode": "black",
+   "mirrors": [
+    "https://hub.mos.ru/rkp/sub-roskompozor/raw/main/bl"
+   ],
+   "origin": "curated",
+   "status": "dead",
+   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "nodes": 0,
+   "secure": 0,
+   "protocols": {},
+   "alive": null,
+   "hash": null,
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": null,
+   "failingSince": "2026-10-20T18:24:48+00:00",
+   "recommended": true
+  },
+  {
+   "id": "kfwl-bl",
+   "title": "KfWL: чёрные списки",
+   "author": "@qkfwl",
+   "homepage": "https://t.me/KfWLRus",
+   "license": "не указана",
+   "description": "Подписка KfWL для обычных блокировок.",
+   "mode": "black",
+   "mirrors": [
+    "https://hub.mos.ru/kfwl/auto/raw/main/bl"
+   ],
+   "origin": "curated",
+   "status": "dead",
+   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "nodes": 0,
+   "secure": 0,
+   "protocols": {},
+   "alive": null,
+   "hash": null,
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": null,
+   "failingSince": "2026-10-20T18:24:48+00:00",
+   "recommended": true
+  },
+  {
+   "id": "bunker-bl",
+   "title": "Бункер Кота: чёрные списки",
+   "author": "@K0TLUX",
+   "homepage": "https://t.me/BUNKER_KOTA",
+   "license": "не указана",
+   "description": "Подписка Бункера Кота для обычных блокировок.",
+   "mode": "black",
+   "mirrors": [
+    "https://hub.mos.ru/akelladejavu/bunker/-/raw/main/BLACK_LIST.txt"
+   ],
+   "origin": "curated",
+   "status": "dead",
+   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "nodes": 0,
+   "secure": 0,
+   "protocols": {},
+   "alive": null,
+   "hash": null,
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": null,
+   "failingSince": "2026-10-20T18:24:48+00:00",
+   "recommended": true
+  },
+  {
+   "id": "found-a85480064c",
+   "title": "vladvarp · vless.txt",
+   "author": "vladvarp",
+   "homepage": "https://github.com/vladvarp/Prometheus",
+   "license": "не указана",
+   "description": "Найден автоматически: vless.txt.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/vladvarp/Prometheus/main/WhiteList/vless.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 200,
+   "secure": 198,
+   "protocols": {
+    "vless": 193,
+    "hysteria2": 7
+   },
+   "alive": null,
+   "hash": "0869028623c66193",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "found-3768980559",
+   "title": "flaafix · AetrisVPN.txt",
+   "author": "flaafix",
+   "homepage": "https://github.com/flaafix/AetrisVPN",
+   "license": "не указана",
+   "description": "Найден автоматически: AetrisVPN.txt.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/flaafix/AetrisVPN/main/AetrisVPN.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 550,
+   "secure": 524,
+   "protocols": {
+    "vless": 547,
+    "trojan": 3
+   },
+   "alive": null,
+   "hash": "d507f2a42bc2d528",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "found-437bdb22fd",
+   "title": "zieng2 · vless_lite.txt",
+   "author": "zieng2",
+   "homepage": "https://github.com/zieng2/wl",
+   "license": "не указана",
+   "description": "Найден автоматически: vless_lite.txt.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/zieng2/wl/main/vless_lite.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 105,
+   "secure": 105,
+   "protocols": {
+    "vless": 105
+   },
+   "alive": null,
+   "hash": "c5fc2732edc8917b",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "found-96e221582d",
+   "title": "OceaniaVPN · whitelist.txt",
+   "author": "OceaniaVPN",
+   "homepage": "https://github.com/OceaniaVPN/StekloVPN",
+   "license": "не указана",
+   "description": "Найден автоматически: whitelist.txt.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/OceaniaVPN/StekloVPN/main/configs/whitelist.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 55,
+   "secure": 55,
+   "protocols": {
+    "vless": 55
+   },
+   "alive": null,
+   "hash": "1ff31a5d7ad0dfea",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": false
+  },
+  {
+   "id": "found-232058136b",
+   "title": "Diversan313 · alive_bs.txt",
+   "author": "Diversan313",
+   "homepage": "https://github.com/Diversan313/apex-parser",
+   "license": "не указана",
+   "description": "Найден автоматически: alive_bs.txt.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/Diversan313/apex-parser/main/subs/main/alive_bs.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 72,
+   "secure": 72,
+   "protocols": {
+    "vless": 71,
+    "ss": 1
+   },
+   "alive": null,
+   "hash": "c922ac7974fa8d50",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": false
+  },
+  {
+   "id": "found-c332757594",
+   "title": "VansFenix · configs.txt",
+   "author": "VansFenix",
+   "homepage": "https://github.com/VansFenix/vpnparser",
+   "license": "не указана",
+   "description": "Найден автоматически: configs.txt. Пометка автора: 🏳️ Белый айпи.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/VansFenix/vpnparser/main/configs.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 205,
+   "secure": 200,
+   "protocols": {
+    "vless": 175,
+    "ss": 10,
+    "trojan": 7,
+    "vmess": 13
+   },
+   "alive": null,
+   "hash": "47dba175c3265224",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "found-5440e80f35",
+   "title": "VansFenix · good.txt",
+   "author": "VansFenix",
+   "homepage": "https://github.com/VansFenix/vpnparser",
+   "license": "не указана",
+   "description": "Найден автоматически: good.txt. Пометка автора: 🏳️ Белый айпи.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/VansFenix/vpnparser/main/good.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 76,
+   "secure": 73,
+   "protocols": {
+    "vless": 64,
+    "ss": 6,
+    "trojan": 4,
+    "vmess": 2
+   },
+   "alive": null,
+   "hash": "ac47674734c2bb5c",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "found-b9f863a496",
+   "title": "VansFenix · speed.txt",
+   "author": "VansFenix",
+   "homepage": "https://github.com/VansFenix/vpnparser",
+   "license": "не указана",
+   "description": "Найден автоматически: speed.txt. Пометка автора: 🏳️ Белый айпи.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/VansFenix/vpnparser/main/speed.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 50,
+   "secure": 49,
+   "protocols": {
+    "vless": 38,
+    "ss": 6,
+    "trojan": 4,
+    "vmess": 2
+   },
+   "alive": null,
+   "hash": "96d0527b58deb0da",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": false
+  },
+  {
+   "id": "found-ecb5e5dfb1",
+   "title": "VansFenix · vless.txt",
+   "author": "VansFenix",
+   "homepage": "https://github.com/VansFenix/vpnparser",
+   "license": "не указана",
+   "description": "Найден автоматически: vless.txt. Пометка автора: 🏳️ Белый айпи.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/VansFenix/vpnparser/main/vless.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 178,
+   "secure": 173,
+   "protocols": {
+    "vless": 178
+   },
+   "alive": null,
+   "hash": "c5a37aa74007f995",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "found-f81596bdc2",
+   "title": "igareck · WHITE-CIDR-RU-all.txt",
+   "author": "igareck",
+   "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+   "license": "не указана",
+   "description": "Найден автоматически: WHITE-CIDR-RU-all.txt.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-CIDR-RU-all.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 55,
+   "secure": 55,
+   "protocols": {
+    "vless": 55
+   },
+   "alive": null,
+   "hash": "c65dc56e62d24d79",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": false
+  },
+  {
+   "id": "found-b61bc14421",
+   "title": "flaafix · AetrisVPN.txt",
+   "author": "flaafix",
+   "homepage": "https://github.com/flaafix/AetrisVPN-white-list-lite",
+   "license": "не указана",
+   "description": "Найден автоматически: AetrisVPN.txt.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/flaafix/AetrisVPN-white-list-lite/main/AetrisVPN.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 62,
+   "secure": 57,
+   "protocols": {
+    "ss": 19,
+    "vless": 39,
+    "vmess": 4
+   },
+   "alive": null,
+   "hash": "492c1d7106472111",
+   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": null,
+   "recommended": false
+  }
+ ]
+}

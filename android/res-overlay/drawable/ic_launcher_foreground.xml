@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- кольцо -->
+    <path android:fillColor="#FF3EC6FF"
+        android:pathData="M54,30A24,24 0,1 0,78 54A24,24 0,0 0,54 30ZM54,34.5A19.5,19.5 0,1 1,34.5 54A19.5,19.5 0,0 1,54 34.5Z" />
+    <!-- стрелка компаса -->
+    <path android:fillColor="#FF3EC6FF"
+        android:pathData="M65,43L58,58L43,65L50,50Z" />
+    <path android:fillColor="#FF0B0E14"
+        android:pathData="M54,51.5A2.5,2.5 0,1 0,56.5 54A2.5,2.5 0,0 0,54 51.5Z" />
+</vector>

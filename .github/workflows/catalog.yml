@@ -1,0 +1,34 @@
+name: Каталог подписок
+
+# Раз в 6 часов проверяем открытые подписки, ищем новые и обновляем catalog/catalog.json.
+# «Лоцман» сам подтягивает этот файл — новые источники появляются без обновления приложения.
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catalog
+  cancel-in-progress: false
+
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверка источников
+        run: python3 tools/catalog.py --tcp | tee catalog-report.txt
+
+      - name: Сохранить
+        run: |
+          if git diff --quiet -- catalog; then echo "Без изменений"; exit 0; fi
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add catalog/catalog.json
+          git commit -m "Каталог: $(date -u +'%Y-%m-%d %H:%M') UTC"
+          git push

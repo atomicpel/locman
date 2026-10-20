@@ -1,0 +1,220 @@
+{
+  "comment": "Курируемый список открытых подписок. Его проверяет tools/catalog.py (раз в 6 часов в GitHub Actions) и собирает catalog.json, который «Лоцман» подтягивает сам.",
+  "sources": [
+    {
+      "id": "zieng2-universal",
+      "title": "WL Universal",
+      "author": "zieng2",
+      "homepage": "https://github.com/zieng2/wl",
+      "license": "не указана",
+      "description": "Полный список под белые списки, есть российские зеркала.",
+      "mode": "white",
+      "mirrors": [
+        "https://raw.githubusercontent.com/zieng2/wl/main/vless_universal.txt",
+        "https://codeberg.org/zieng2/wl/raw/branch/main/vless_universal.txt",
+        "https://gitlab.com/zieng2/wl/raw/main/vless_universal.txt",
+        "https://hub.mos.ru/zieng2/wl/raw/main/list_universal.txt",
+        "https://gitverse.ru/api/repos/zieng2/wl/raw/branch/master/list_universal.txt"
+      ]
+    },
+    {
+      "id": "rjsxrd-bypass",
+      "title": "rjsxrd",
+      "author": "whoahaow",
+      "homepage": "https://github.com/whoahaow/rjsxrd",
+      "license": "MIT",
+      "description": "Конфиги для обхода по SNI и подсетям, обновление ежечасно.",
+      "mode": "white",
+      "mirrors": [
+        "https://raw.githubusercontent.com/whoahaow/rjsxrd/main/githubmirror/bypass/bypass-all.txt",
+        "https://cdn.jsdelivr.net/gh/whoahaow/rjsxrd@main/githubmirror/bypass/bypass-all.txt"
+      ]
+    },
+    {
+      "id": "igareck-white-mobile",
+      "title": "igareck: белые списки (мобильный)",
+      "author": "igareck",
+      "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+      "license": "GPL-3.0",
+      "description": "VLESS Reality, проверенные на мобильных сетях с белыми списками.",
+      "mode": "white",
+      "mirrors": [
+        "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+        "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+        "https://gitlab.com/igareck/vpn-configs-for-russia/-/raw/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
+      ]
+    },
+    {
+      "id": "igareck-white-cidr",
+      "title": "igareck: белые подсети",
+      "author": "igareck",
+      "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+      "license": "GPL-3.0",
+      "description": "Серверы на адресах из белых подсетей, только проверенные.",
+      "mode": "white",
+      "mirrors": [
+        "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-CIDR-RU-checked.txt",
+        "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/WHITE-CIDR-RU-checked.txt",
+        "https://gitlab.com/igareck/vpn-configs-for-russia/-/raw/main/WHITE-CIDR-RU-checked.txt"
+      ]
+    },
+    {
+      "id": "igareck-white-sni",
+      "title": "igareck: белые SNI",
+      "author": "igareck",
+      "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+      "license": "GPL-3.0",
+      "description": "Серверы, которые маскируются под сайты из белого списка.",
+      "mode": "white",
+      "mirrors": [
+        "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-SNI-RU-all.txt",
+        "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/WHITE-SNI-RU-all.txt"
+      ]
+    },
+    {
+      "id": "telega-ru-whitelist",
+      "title": "TelegaVPN: белые списки",
+      "author": "TelegaVPN",
+      "homepage": "https://github.com/TelegaVPN/free-vpn-keys",
+      "license": "не указана",
+      "description": "Подборка под белые списки, обновляется каждые 30 минут.",
+      "mode": "white",
+      "mirrors": [
+        "https://raw.githubusercontent.com/TelegaVPN/free-vpn-keys/main/sub/v2raytun/ru-whitelist.txt",
+        "https://cdn.jsdelivr.net/gh/TelegaVPN/free-vpn-keys@main/sub/v2raytun/ru-whitelist.txt"
+      ]
+    },
+    {
+      "id": "rkp-wl",
+      "title": "РКП: белые списки",
+      "author": "@RKP_channel",
+      "homepage": "https://t.me/RKP_channel",
+      "license": "не указана",
+      "description": "Подписка Анти-РосКомПозор для режима белых списков.",
+      "mode": "white",
+      "mirrors": ["https://hub.mos.ru/rkp/sub-roskompozor/raw/main/wl"]
+    },
+    {
+      "id": "kfwl-wl",
+      "title": "KfWL: белые списки",
+      "author": "@qkfwl",
+      "homepage": "https://t.me/KfWLRus",
+      "license": "не указана",
+      "description": "Подписка KfWL для режима белых списков.",
+      "mode": "white",
+      "mirrors": ["https://hub.mos.ru/kfwl/auto/raw/main/wl"]
+    },
+    {
+      "id": "bunker-wl",
+      "title": "Бункер Кота: белые списки",
+      "author": "@K0TLUX",
+      "homepage": "https://t.me/BUNKER_KOTA",
+      "license": "не указана",
+      "description": "Подписка Бункера Кота для режима белых списков.",
+      "mode": "white",
+      "mirrors": ["https://hub.mos.ru/akelladejavu/bunker/-/raw/main/WHITE_LIST.txt"]
+    },
+    {
+      "id": "igareck-black-vless",
+      "title": "igareck: VLESS",
+      "author": "igareck",
+      "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+      "license": "GPL-3.0",
+      "description": "Проверенные из России VLESS для обычных блокировок.",
+      "mode": "black",
+      "mirrors": [
+        "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt",
+        "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/BLACK_VLESS_RUS.txt",
+        "https://gitlab.com/igareck/vpn-configs-for-russia/-/raw/main/BLACK_VLESS_RUS.txt"
+      ]
+    },
+    {
+      "id": "igareck-black-mobile",
+      "title": "igareck: VLESS для мобильного",
+      "author": "igareck",
+      "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+      "license": "GPL-3.0",
+      "description": "VLESS, которые держатся на мобильном интернете.",
+      "mode": "black",
+      "mirrors": [
+        "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt",
+        "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/BLACK_VLESS_RUS_mobile.txt"
+      ]
+    },
+    {
+      "id": "igareck-black-ss",
+      "title": "igareck: Shadowsocks и другие",
+      "author": "igareck",
+      "homepage": "https://github.com/igareck/vpn-configs-for-russia",
+      "license": "GPL-3.0",
+      "description": "Shadowsocks и остальные протоколы, проверенные из России.",
+      "mode": "black",
+      "mirrors": [
+        "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_SS+All_RUS.txt",
+        "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/BLACK_SS+All_RUS.txt"
+      ]
+    },
+    {
+      "id": "telega-for-russia",
+      "title": "TelegaVPN: для России",
+      "author": "TelegaVPN",
+      "homepage": "https://github.com/TelegaVPN/free-vpn-keys",
+      "license": "не указана",
+      "description": "Reality, Trojan, Hysteria2 под обычные блокировки, обновление каждые 30 минут.",
+      "mode": "black",
+      "mirrors": [
+        "https://raw.githubusercontent.com/TelegaVPN/free-vpn-keys/main/sub/v2raytun/for-russia.txt",
+        "https://cdn.jsdelivr.net/gh/TelegaVPN/free-vpn-keys@main/sub/v2raytun/for-russia.txt"
+      ]
+    },
+    {
+      "id": "kort-ru-sni",
+      "title": "kort0881: RU-серверы",
+      "author": "kort0881",
+      "homepage": "https://github.com/kort0881/vpn-vless-configs-russia",
+      "license": "не указана",
+      "description": "Валидные VLESS с российскими и СНГ-адресами, ежедневная ротация.",
+      "mode": "black",
+      "mirrors": [
+        "https://raw.githubusercontent.com/kort0881/vpn-vless-configs-russia/main/data/githubmirror/ru-sni/vless.txt"
+      ]
+    },
+    {
+      "id": "rkp-bl",
+      "title": "РКП: чёрные списки",
+      "author": "@RKP_channel",
+      "homepage": "https://t.me/RKP_channel",
+      "license": "не указана",
+      "description": "Подписка Анти-РосКомПозор для обычных блокировок.",
+      "mode": "black",
+      "mirrors": ["https://hub.mos.ru/rkp/sub-roskompozor/raw/main/bl"]
+    },
+    {
+      "id": "kfwl-bl",
+      "title": "KfWL: чёрные списки",
+      "author": "@qkfwl",
+      "homepage": "https://t.me/KfWLRus",
+      "license": "не указана",
+      "description": "Подписка KfWL для обычных блокировок.",
+      "mode": "black",
+      "mirrors": ["https://hub.mos.ru/kfwl/auto/raw/main/bl"]
+    },
+    {
+      "id": "bunker-bl",
+      "title": "Бункер Кота: чёрные списки",
+      "author": "@K0TLUX",
+      "homepage": "https://t.me/BUNKER_KOTA",
+      "license": "не указана",
+      "description": "Подписка Бункера Кота для обычных блокировок.",
+      "mode": "black",
+      "mirrors": ["https://hub.mos.ru/akelladejavu/bunker/-/raw/main/BLACK_LIST.txt"]
+    }
+  ],
+  "discover": [
+    {
+      "comment": "Сводный список подписок под белые списки, который ведёт solovyov-jenya2004/all_subs",
+      "url": "https://raw.githubusercontent.com/solovyov-jenya2004/all_subs/main/sources.txt",
+      "mode": "white"
+    }
+  ]
+}

@@ -1,0 +1,179 @@
+name: Сборка
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths-ignore:
+      - '**.md'
+      - 'catalog/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NDK_VERSION: 27.2.12479018
+
+jobs:
+  build:
+    name: APK (arm64-v8a)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Версия
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            IFS=. read -r MA MI PA <<<"$VERSION"
+            CODE=$((MA * 10000 + MI * 100 + PA))
+          else
+            VERSION="0.0.${{ github.run_number }}"
+            CODE=${{ github.run_number }}
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "CODE=$CODE" >> "$GITHUB_ENV"
+          mkdir -p report
+          { echo "Лоцман $VERSION ($CODE)"; flutter --version; java -version 2>&1; } | tee report/versions.txt
+
+      - name: Кэш ядра и TUN-моста
+        id: natives
+        uses: actions/cache@v4
+        with:
+          path: |
+            android/app/libs/libv2ray.aar
+            android/app/src/main/jniLibs
+          key: natives-${{ env.NDK_VERSION }}-${{ hashFiles('tools/fetch_natives.sh', 'tools/hev-udp-bind.patch') }}
+
+      - name: NDK
+        if: steps.natives.outputs.cache-hit != 'true'
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;${NDK_VERSION}" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Ядро Xray и TUN-мост
+        if: steps.natives.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/fetch_natives.sh
+
+      - name: Платформенные файлы Flutter
+        run: |
+          flutter create --org app --project-name locman --platforms android .
+          rm -f test/widget_test.dart
+          python3 tools/patch_android.py > report/gradle-patch.txt
+          cp catalog/catalog.json assets/catalog.json
+
+      - name: Анализ кода
+        run: |
+          set -o pipefail
+          flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | tee report/analyze.txt
+
+      - name: Тесты
+        run: |
+          set -o pipefail
+          flutter test 2>&1 | tee report/tests.txt
+
+      - name: Ключ подписи
+        env:
+          KEYSTORE_BASE64: ${{ secrets.LOCMAN_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.LOCMAN_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "LOCMAN_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "LOCMAN_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "Подпись: ключ релиза"
+          else
+            echo "Подпись: отладочный ключ (секретов нет)"
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "::error::Релиз без ключа подписи выпускать нельзя"; exit 1; fi
+          fi
+
+      - name: Сборка APK
+        run: |
+          set -o pipefail
+          flutter build apk --release --target-platform android-arm64 \
+            --build-name "$VERSION" --build-number "$CODE" 2>&1 | tee report/build.txt
+
+      - name: Проверка APK
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          ls -la "$APK"
+          listing="$(unzip -l "$APK")"
+          echo "$listing" | grep -E 'lib/' | awk '{print $1, $4}' | tee report/libs.txt
+          for lib in libgojni.so libhev-socks5-tunnel.so libflutter.so libapp.so; do
+            grep -q "lib/arm64-v8a/$lib" <<<"$listing" || { echo "::error::В APK нет $lib"; exit 1; }
+          done
+          dex="$(unzip -p "$APK" 'classes*.dex' | strings)"
+          for cls in libv2ray/Libv2ray hev/sockstun/TProxyService app/locman/LocmanVpnService; do
+            grep -q "L$cls;" <<<"$dex" || { echo "::error::R8 удалил или переименовал $cls"; exit 1; }
+          done
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          "$APKSIGNER" verify --print-certs "$APK" | tee report/cert.txt
+          mkdir -p dist
+          cp "$APK" "dist/Locman-$VERSION-arm64-v8a.apk"
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - name: Отчёт о сборке
+        if: always()
+        run: |
+          tail -n 300 report/build.txt > report/build-tail.txt 2>/dev/null || true
+          rm -f report/build.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: report
+          path: report
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: locman-apk
+          path: dist/*.apk
+          retention-days: 14
+
+      - name: Релиз
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/make_update_json.py "$VERSION" "$CODE" "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" \
+            release-notes.txt dist/*.apk > dist/update.json
+          cat dist/update.json
+          CERT=$(grep -m1 'SHA-256' report/cert.txt | awk '{print toupper($NF)}' | sed 's/../&:/g; s/:$//')
+          {
+            echo "Что нового:"
+            sed 's/^/- /' release-notes.txt
+            echo
+            echo "Для Poco X7 Pro и других телефонов на arm64: Locman-$VERSION-arm64-v8a.apk."
+            echo
+            echo "Отпечаток сертификата подписи (SHA-256): $CERT"
+          } > dist/NOTES.md
+          gh release create "$GITHUB_REF_NAME" dist/*.apk dist/SHA256SUMS.txt dist/update.json \
+            --title "Лоцман $VERSION" --notes-file dist/NOTES.md --latest
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp dist/update.json "$RUNNER_TEMP/update.json"
+          git fetch --depth 1 origin updates && git checkout -B updates origin/updates || git checkout --orphan updates
+          git rm -rf --cached . > /dev/null 2>&1 || true
+          cp "$RUNNER_TEMP/update.json" update.json
+          git add update.json
+          git commit -m "update.json для $GITHUB_REF_NAME"
+          git push origin HEAD:updates --force
