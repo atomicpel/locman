@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../core/node.dart';
+import '../engine/native.dart';
 import '../state.dart';
 import 'orb.dart';
 import 'theme.dart';
@@ -89,6 +90,10 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(child: StatTile('В сети', on ? formatClock(elapsed) : '—')),
         ]),
+        if (on) ...[
+          const SizedBox(height: 16),
+          _IpCard(s: s),
+        ],
         if (s.phase != Phase.seek) ...[
           const SizedBox(height: 16),
           PillButton(label: 'Найти рабочий узел', onTap: () => s.connect(ignorePin: true)),
@@ -322,4 +327,76 @@ class _UpdateBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+/// «Как вас видят сайты» — проверка адреса через туннель сразу после подключения.
+class _IpCard extends StatelessWidget {
+  const _IpCard({required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    final i = s.ipInfo;
+    Widget row(String label, String value) => Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: p.text(12, color: p.muted)),
+              const SizedBox(height: 2),
+              SelectableText(value, style: p.text(16, weight: FontWeight.w600)),
+            ],
+          ),
+        );
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('Как вас видят сайты', style: p.text(16, weight: FontWeight.w600))),
+              if (s.ipLoading)
+                SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: p.accent))
+              else
+                Pressable(
+                  onTap: s.refreshIp,
+                  label: 'Проверить адрес ещё раз',
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.refresh_rounded, size: 20, color: p.muted),
+                  ),
+                ),
+            ],
+          ),
+          if (i != null) ...[
+            row('IP-адрес', i.ip),
+            row('Местоположение', i.place.isEmpty ? '—' : '${i.flag.isEmpty ? '' : '${i.flag} '}${i.place}'),
+            row('Провайдер', [i.provider, i.asn].whereType<String>().join(' · ').ifEmpty('—')),
+            const SizedBox(height: 8),
+            Text('по данным ${i.source}', style: p.text(12, color: p.muted)),
+          ] else if (s.ipError != null) ...[
+            const SizedBox(height: 8),
+            Text('Не удалось проверить: ${s.ipError}', style: p.text(14, color: p.danger)),
+          ] else ...[
+            const SizedBox(height: 8),
+            Text('Проверяем адрес через туннель…', style: p.text(14, color: p.muted)),
+          ],
+          const SizedBox(height: 4),
+          Pressable(
+            onTap: () => Native.openUrl('https://2ip.io/ru/'),
+            label: 'Открыть 2ip.io',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text('Открыть 2ip.io в браузере', style: p.text(14, weight: FontWeight.w500, color: p.accent)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+extension on String {
+  String ifEmpty(String other) => isEmpty ? other : this;
 }

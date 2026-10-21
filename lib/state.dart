@@ -156,6 +156,11 @@ class AppState extends ChangeNotifier {
   final Set<String> refreshing = {};
   NetKind? detected;
   UpdateInfo? update;
+
+  /// Внешний адрес после подключения (2ip / ip-api / ipwho.is).
+  IpInfo? ipInfo;
+  bool ipLoading = false;
+  String? ipError;
   double? updateProgress;
   String? updateError;
   bool checkingUpdate = false;
@@ -986,8 +991,30 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Проверка адреса через туннель: IP, место, провайдер.
+  Future<void> refreshIp() async {
+    if (ipLoading) return;
+    ipLoading = true;
+    ipError = null;
+    notifyListeners();
+    try {
+      final info = await Net.whoAmI();
+      if (phase == Phase.on) {
+        ipInfo = info;
+        log('Адрес: ${info.ip}${info.place.isEmpty ? '' : ' · ${info.place}'}${info.provider == null ? '' : ' · ${info.provider}'}');
+      }
+    } catch (e) {
+      ipError = _short(e);
+    } finally {
+      ipLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> disconnect() async {
     _seekGen++;
+    ipInfo = null;
+    ipError = null;
     final n = nodeById(activeId);
     phase = Phase.off;
     seekStep = 0;
@@ -1209,6 +1236,7 @@ class AppState extends ChangeNotifier {
     history.clear();
     _probeFails = 0;
     _save();
+    unawaited(refreshIp());
     final kind = detected == null ? '' : ' · ${detected == NetKind.white ? 'БС' : 'ЧС'}';
     final ms = latencyOf(n.id);
     log('${n.title} · ${n.protocol.title}${ms > 0 ? ' · $ms мс' : ''}$kind');
@@ -1263,6 +1291,7 @@ class AppState extends ChangeNotifier {
     }
     if (s.phase == 'connected' && s.local != null && Net.tunnel == null) {
       Net.tunnel = s.local;
+      if (ipInfo == null) unawaited(refreshIp());
     } else if ((s.phase == 'idle' || s.phase == 'failed') && phase == Phase.on) {
       phase = s.phase == 'failed' ? Phase.fail : Phase.off;
       failText = s.error;

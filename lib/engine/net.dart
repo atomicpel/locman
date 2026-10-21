@@ -7,6 +7,27 @@ import 'dart:typed_data';
 import '../core/catalog.dart';
 import '../core/xray_config.dart';
 
+/// Что видят сайты после подключения.
+class IpInfo {
+  const IpInfo({required this.ip, this.code, this.country, this.city, this.region, this.provider, this.asn, required this.source});
+  final String ip;
+  final String? code;
+  final String? country;
+  final String? city;
+  final String? region;
+  final String? provider;
+  final String? asn;
+  final String source;
+
+  String get flag {
+    final c = code?.toUpperCase();
+    if (c == null || c.length != 2 || !RegExp(r'^[A-Z]{2}$').hasMatch(c)) return '';
+    return String.fromCharCodes(c.codeUnits.map((u) => 0x1F1E6 + u - 65));
+  }
+
+  String get place => [city, if (region != null && region != city) region, country].whereType<String>().join(', ');
+}
+
 class HttpResult {
   HttpResult(this.status, this.body, this.headers);
   final int status;
@@ -247,6 +268,75 @@ class Net {
     } finally {
       client.close(force: true);
     }
+  }
+
+  /// Внешний IP, местоположение и провайдер — всё через туннель, как их видят сайты.
+  /// Порядок: 2ip (api.2ip.me), затем ip-api.com (по-русски), затем ipwho.is.
+  static Future<IpInfo> whoAmI() async {
+    final via = tunnel != null;
+    Future<Map<String, dynamic>?> json(String url) async {
+      try {
+        final r = await get(url, viaTunnel: via, timeout: const Duration(seconds: 10), maxBytes: 64 * 1024);
+        if (r.status != 200) return null;
+        final j = jsonDecode(r.body);
+        return j is Map<String, dynamic> ? j : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    String? s(Object? v) => (v == null || v.toString().trim().isEmpty) ? null : v.toString().trim();
+
+    // Сам адрес: Cloudflare trace, запасной — ipify.
+    String? ip;
+    try {
+      final r = await get('https://www.cloudflare.com/cdn-cgi/trace', viaTunnel: via, timeout: const Duration(seconds: 10));
+      ip = RegExp(r'^ip=(.+)$', multiLine: true).firstMatch(r.body)?.group(1)?.trim();
+    } catch (_) {}
+    ip ??= s((await json('https://api.ipify.org?format=json'))?['ip']);
+    if (ip == null) throw const HttpException('сайты проверки адреса не ответили');
+
+    final geo = await json('https://api.2ip.me/geo.json?ip=$ip');
+    if (geo != null && s(geo['country_rus'] ?? geo['country']) != null) {
+      final prov = await json('https://api.2ip.me/provider.json?ip=$ip');
+      return IpInfo(
+        ip: ip,
+        code: s(geo['country_code']),
+        country: s(geo['country_rus']) ?? s(geo['country']),
+        city: s(geo['city_rus']) ?? s(geo['city']),
+        region: s(geo['region_rus']) ?? s(geo['region']),
+        provider: s(prov?['name_rus']) ?? s(prov?['name_ripe']),
+        source: '2ip',
+      );
+    }
+    final a = await json('http://ip-api.com/json/$ip?lang=ru&fields=status,countryCode,country,regionName,city,isp,org,as');
+    if (a != null && a['status'] == 'success') {
+      return IpInfo(
+        ip: ip,
+        code: s(a['countryCode']),
+        country: s(a['country']),
+        city: s(a['city']),
+        region: s(a['regionName']),
+        provider: s(a['isp']) ?? s(a['org']),
+        asn: s(a['as']),
+        source: 'ip-api.com',
+      );
+    }
+    final w = await json('https://ipwho.is/$ip?lang=ru');
+    if (w != null && w['success'] == true) {
+      final c = w['connection'] is Map ? w['connection'] as Map : const {};
+      return IpInfo(
+        ip: ip,
+        code: s(w['country_code']),
+        country: s(w['country']),
+        city: s(w['city']),
+        region: s(w['region']),
+        provider: s(c['isp']) ?? s(c['org']),
+        asn: c['asn'] == null ? null : 'AS${c['asn']}',
+        source: 'ipwho.is',
+      );
+    }
+    return IpInfo(ip: ip, source: 'cloudflare');
   }
 
   /// IPv4 домена через DNS-over-HTTPS — мимо подменённого DNS оператора.
