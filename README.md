@@ -26,7 +26,7 @@ Kotlin (android/app/…)    VpnService → TUN → hev-socks5-tunnel → SOCKS5 
 Сборка — только в GitHub Actions (`.github/workflows/build.yml`): `flutter create` дополняет платформенные файлы,
 `tools/patch_android.py` настраивает Gradle, `tools/fetch_natives.sh` кладёт ядро Xray
 ([AndroidLibXrayLite](https://github.com/2dust/AndroidLibXrayLite)) и [hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel).
-Релиз — тег `vX.Y.Z`.
+Релиз — ветка `release/vX.Y.Z` (или тег `vX.Y.Z`): CI подпишет APK, создаст тег, релиз и `update.json`.
 
 ## Благодарности и лицензия
 
