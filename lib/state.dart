@@ -40,11 +40,11 @@ const modeMeta = {
   'block': ('ЧС', 'Обычные блокировки: зарубежные узлы'),
 };
 
-/// Скорость проверки: сколько узлов проверяем одновременно.
+/// Скорость проверки: сколько узлов проверяем через ядро одновременно.
 const probeMeta = {
-  'gentle': ('Бережная', 4),
-  'normal': ('Обычная', 8),
-  'fast': ('Быстрая', 16),
+  'gentle': ('Бережная', 6),
+  'normal': ('Обычная', 16),
+  'fast': ('Быстрая', 32),
 };
 
 const dnsMeta = {'cloud': 'Cloudflare', 'quad': 'Quad9', 'google': 'Google'};
@@ -182,7 +182,7 @@ class AppState extends ChangeNotifier {
   int _seekGen = 0;
 
   /// Сколько TCP-проверок одновременно. В эмуляторе меньше: его сеть (slirp) захлёбывается.
-  int _tcpParallel = 48;
+  int _tcpParallel = 96;
   int _poolLimit = 240;
   bool _skipTcp = false;
   Timer? _toastTimer;
@@ -791,10 +791,21 @@ class AppState extends ChangeNotifier {
 
   NodeCheck? checkOf(String nodeId) => health['$_healthKind/$nodeId'];
 
+  /// Результат проверки считается свежим 20 минут — потом узел снова «не проверен».
+  static const freshMs = 20 * 60 * 1000;
+
   int latencyOf(String nodeId) {
     final c = checkOf(nodeId);
     if (c == null) return 0;
+    if (DateTime.now().millisecondsSinceEpoch - c.at > freshMs) return 0;
     return c.delay;
+  }
+
+  /// Есть ли вообще свежие проверки — тогда фильтры показывают только живые узлы.
+  bool get hasFreshChecks {
+    final cutoff = DateTime.now().millisecondsSinceEpoch - freshMs;
+    final prefix = '$_healthKind/';
+    return health.entries.any((e) => e.key.startsWith(prefix) && e.value.at > cutoff);
   }
 
   bool isDead(String nodeId) => (checkOf(nodeId)?.fails ?? 0) >= 2;
@@ -886,7 +897,12 @@ class AppState extends ChangeNotifier {
 
   Future<void> checkAll() async {
     if (checkingAll > 0) return;
-    final list = visibleNodes();
+    // На вкладке Reality/XHTTP проверяем только их — так в разы быстрее.
+    final list = visibleNodes().where((n) {
+      if (filter == 'reality') return n.isReality;
+      if (filter == 'xhttp') return n.isXhttp;
+      return true;
+    }).toList();
     if (list.isEmpty) {
       flash('Нет узлов для проверки');
       return;
@@ -894,23 +910,23 @@ class AppState extends ChangeNotifier {
     checkingAll = list.length;
     checkingDone = 0;
     notifyListeners();
-    final tcpAlive = <ProxyNode>[];
+    // Конвейер: TCP-проверка и настоящая проверка идут одновременно, а не по очереди.
+    // Один сервер (адрес:порт) пингуем по TCP один раз, даже если он в списке много раз.
+    final tcpCache = <String, Future<int>>{};
+    final real = _Gate(probeMeta[probe]!.$2);
     await _pool(list, _tcpParallel, (n) async {
-      if (n.coreOnly) {
-        tcpAlive.add(n);
-      } else {
-        final tcp = await Net.tcping(n.address, n.port);
+      if (!n.coreOnly) {
+        final key = '${n.address.toLowerCase()}:${n.port}';
+        final tcp = await (tcpCache[key] ??= Net.tcping(n.address, n.port, timeout: const Duration(milliseconds: 1500)));
         if (tcp < 0) {
           _record(n.id, -1, real: false);
           checkingDone++;
-        } else {
-          tcpAlive.add(n);
+          _throttledNotify();
+          return;
         }
       }
-      _throttledNotify();
-    });
-    await _pool(tcpAlive, probeMeta[probe]!.$2, (n) async {
-      _record(n.id, await _realTest(n), real: true);
+      final d = await real.run(() => Native.measure(_testConfig(n, frag: _fragFor(n)), testUrl));
+      _record(n.id, d, real: true);
       checkingDone++;
       _throttledNotify();
     });
@@ -1133,7 +1149,10 @@ class AppState extends ChangeNotifier {
         local: local, directRu: directRu, dns: dns, fragment: _fragFor(n), xrayTun: xrayTun);
     final bypass = {...excludes, if (directRu) ...directApps}.toList();
     _smokeSink?.call('bring ${target.address} tun=$tunEngine');
-    final waiter = Native.events().where((e) => e is VpnStatus && e.phase != 'connecting').first;
+    // Ждём статус именно этого узла, чтобы не принять «подключено» от предыдущего.
+    final waiter = Native.events()
+        .where((e) => e is VpnStatus && e.phase != 'connecting' && (e.phase != 'connected' || e.nodeId == n.id))
+        .first;
     try {
       await Native.start(
         config: config,
@@ -1223,6 +1242,12 @@ class AppState extends ChangeNotifier {
       phase = Phase.on;
       activeId = s.nodeId;
       connectedAt = s.since ?? DateTime.now().millisecondsSinceEpoch;
+      notifyListeners();
+    }
+    if (s.phase == 'connected' && phase == Phase.on && s.nodeId != null && s.nodeId!.isNotEmpty && s.nodeId != activeId) {
+      // Служба — источник правды о том, какой узел реально поднят.
+      log('Сверка с туннелем: активен ${s.name ?? s.nodeId}');
+      activeId = s.nodeId;
       notifyListeners();
     }
     if (s.phase == 'connected' && s.local != null && Net.tunnel == null) {
@@ -1371,6 +1396,29 @@ Map<String, List<ProxyNode>> _parseManySync(List<(String, String, Map<String, St
 
 ParsedSubscription _parseOneSync((String, String, Map<String, String>) input) =>
     SubscriptionParser.parse(input.$1, input.$2, headers: input.$3);
+
+/// Ограничитель одновременных задач.
+class _Gate {
+  _Gate(this.limit);
+  final int limit;
+  int _busy = 0;
+  final _waiting = <Completer<void>>[];
+
+  Future<T> run<T>(Future<T> Function() task) async {
+    if (_busy >= limit) {
+      final c = Completer<void>();
+      _waiting.add(c);
+      await c.future;
+    }
+    _busy++;
+    try {
+      return await task();
+    } finally {
+      _busy--;
+      if (_waiting.isNotEmpty) _waiting.removeAt(0).complete();
+    }
+  }
+}
 
 String formatRate(int bytesPerSec) {
   if (bytesPerSec < 1024) return '$bytesPerSec Б/с';

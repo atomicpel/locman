@@ -15,7 +15,7 @@ import kotlin.concurrent.thread
 object XrayEngine {
     private const val LIB = "libv2ray.Libv2ray"
     private const val CALLBACK = "libv2ray.CoreCallbackHandler"
-    private const val MEASURE_TIMEOUT_MS = 9000L
+    private const val MEASURE_TIMEOUT_MS = 6000L
 
     private var controller: Any? = null
     var lastError: String? = null

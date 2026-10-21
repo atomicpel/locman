@@ -30,7 +30,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private val main = Handler(Looper.getMainLooper())
-    private val background = Executors.newFixedThreadPool(16) { r -> Thread(r, "locman-call").apply { isDaemon = true } }
+    private val background = Executors.newFixedThreadPool(48) { r -> Thread(r, "locman-call").apply { isDaemon = true } }
     private var pendingPrepare: MethodChannel.Result? = null
     private var sinkListener: ((Map<String, Any?>) -> Unit)? = null
 

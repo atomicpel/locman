@@ -37,8 +37,10 @@ class _NodesScreenState extends State<NodesScreen> {
     final s = widget.s;
     final p = PaletteScope.of(context);
     final q = s.query.trim().toLowerCase();
+    // Reality и XHTTP — только отвечающие сейчас узлы (по свежей проверке), если она была.
+    final onlyAlive = s.filter == 'live' || ((s.filter == 'reality' || s.filter == 'xhttp') && s.hasFreshChecks);
     final list = s.visibleNodes().where((n) {
-      if (s.filter == 'live' && s.latencyOf(n.id) <= 0) return false;
+      if (onlyAlive && s.latencyOf(n.id) <= 0) return false;
       if (s.filter == 'reality' && !n.isReality) return false;
       if (s.filter == 'xhttp' && !n.isXhttp) return false;
       if (q.isEmpty) return true;
@@ -74,6 +76,14 @@ class _NodesScreenState extends State<NodesScreen> {
               onChanged: s.setFilter,
               options: const [('all', 'Все'), ('live', 'Живые'), ('reality', 'Reality'), ('xhttp', 'XHTTP')],
             ),
+            if ((s.filter == 'reality' || s.filter == 'xhttp') && !s.hasFreshChecks) ...[
+              const SizedBox(height: 8),
+              Text('Нажмите проверку вверху — останутся только отвечающие узлы.', style: p.text(13, color: p.muted)),
+            ],
+            if (onlyAlive && s.hasFreshChecks) ...[
+              const SizedBox(height: 8),
+              Text('Только узлы, ответившие за последние 20 минут.', style: p.text(13, color: p.muted)),
+            ],
             if (s.checkingAll > 0) ...[
               const SizedBox(height: 12),
               Text('Проверяем: ${s.checkingDone} из ${s.checkingAll}', style: p.text(13, color: p.muted)),

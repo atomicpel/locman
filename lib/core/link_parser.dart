@@ -199,7 +199,9 @@ class LinkParser {
   }
 
   static String _displayName(String fragment, String host, int port) {
-    final name = pctDecode(fragment).trim();
+    // Многие подписки кодируют пробелы в имени как «+» (форма URL).
+    final spaced = fragment.contains(' ') || fragment.contains('%20') ? fragment : fragment.replaceAll('+', ' ');
+    final name = pctDecode(spaced).replaceAll(RegExp(r'\s+'), ' ').trim();
     return name.isEmpty ? '$host:$port' : name;
   }
 }

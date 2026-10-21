@@ -222,4 +222,9 @@ void main() {
     expect(s.nodes.length, 1);
     expect(s.skipped['private'], 3);
   });
+
+  test('плюсы в имени — это пробелы', () {
+    final n = LinkParser.parse('trojan://p@1.2.3.4:443#%F0%9F%9B%A1+Белый+список+РФ+%2302')!;
+    expect(n.name, '🛡 Белый список РФ #02');
+  });
 }
