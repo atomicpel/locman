@@ -44,7 +44,7 @@ class _MoreIndex extends StatelessWidget {
     final p = PaletteScope.of(context);
     final rows = [
       (SettingsPage.look, 'Оформление', skinMeta[s.skin]!.$1),
-      (SettingsPage.link, 'Подключение', 'Режим ${modeMeta[s.mode]!.$1}, работа в фоне'),
+      (SettingsPage.link, 'Подключение', 'Режим ${modeMeta[s.mode]!.$1}${s.pickFrom == 'reality' ? ', только Reality' : ''}, работа в фоне'),
       (SettingsPage.apps, 'Мимо узла', s.excludes.isEmpty ? 'Приложения без туннеля' : 'Выбрано: ${s.excludes.length}'),
       (SettingsPage.safe, 'Безопасность', 'DNS ${dnsMeta[s.dns]} и скрытие слабых узлов'),
       (SettingsPage.probe, 'Проверка узлов', probeMeta[s.probe]!.$1),
@@ -198,6 +198,22 @@ class _LinkPageState extends State<_LinkPage> with WidgetsBindingObserver {
           title: 'Включать при открытии',
           line: 'Открыли «Лоцман» — он сам прокладывает ход.',
           control: PillSwitch(on: s.autoConnect, onChanged: s.setAutoConnect),
+        ),
+        const SizedBox(height: 16),
+        const SectionTitle('К каким узлам подключаться'),
+        const SizedBox(height: 8),
+        Segment<String>(
+          value: s.pickFrom,
+          onChanged: s.setPickFrom,
+          options: const [('all', 'Ко всем живым'), ('reality', 'Только Reality')],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          s.pickFrom == 'reality'
+              ? 'Кнопка и «Найти рабочий узел» выбирают только среди Reality, и только среди ответивших на проверку. '
+                  'Reality маскируется под обычный сайт, такие узлы дольше живут под блокировками.'
+              : 'Берём самый быстрый из ответивших, любого протокола: VLESS, Trojan, Shadowsocks, Hysteria2.',
+          style: p.text(14, color: p.muted),
         ),
         const SizedBox(height: 16),
         const SectionTitle('Движок туннеля'),

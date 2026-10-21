@@ -133,6 +133,9 @@ class AppState extends ChangeNotifier {
   bool hideDupes = false;
   bool fragment = true;
   String tunEngine = 'xray';
+
+  /// К каким узлам подключаться при поиске: 'all' — ко всем подряд, 'reality' — только к Reality.
+  String pickFrom = 'all';
   Set<String> noFrag = {};
   String? pinnedId;
   String? lastNodeId;
@@ -369,6 +372,7 @@ class AppState extends ChangeNotifier {
     hideDupes = pick('hideDupes', false);
     fragment = pick('fragment', true);
     tunEngine = j['tunEngine'] == 'hev' ? 'hev' : 'xray';
+    pickFrom = j['pickFrom'] == 'reality' ? 'reality' : 'all';
     noFrag = ((j['noFrag'] as List?) ?? const []).map((e) => e.toString()).toSet();
     pinnedId = j['pinnedId'] as String?;
     lastNodeId = j['lastNodeId'] as String?;
@@ -405,6 +409,7 @@ class AppState extends ChangeNotifier {
         'hideDupes': hideDupes,
         'fragment': fragment,
         'tunEngine': tunEngine,
+        'pickFrom': pickFrom,
         'noFrag': noFrag.take(800).toList(),
         'pinnedId': pinnedId,
         'lastNodeId': lastNodeId,
@@ -485,6 +490,10 @@ class AppState extends ChangeNotifier {
   void setHideDupes(bool v) => _set(() => hideDupes = v);
   void setFragment(bool v) => _set(() => fragment = v);
   void setTunEngine(String v) => _set(() => tunEngine = v);
+  void setPickFrom(String v) {
+    _set(() => pickFrom = v);
+    log(v == 'reality' ? 'Подключаться только к живым Reality' : 'Подключаться к любым живым узлам');
+  }
   void setQuery(String q) {
     query = q;
     notifyListeners();
@@ -516,6 +525,7 @@ class AppState extends ChangeNotifier {
       hideDupes = false;
       fragment = true;
       tunEngine = 'xray';
+      pickFrom = 'all';
       pinnedId = null;
       excludes.clear();
       enabledOverrides.clear();
@@ -1006,6 +1016,7 @@ class AppState extends ChangeNotifier {
       if (!isEnabled(s) || !s.fits(kind)) continue;
       for (final n in nodesBySource[s.id] ?? const <ProxyNode>[]) {
         if (hideInsecure && n.isInsecure) continue;
+        if (pickFrom == 'reality' && !n.isReality) continue;
         if (isDead(n.id)) continue;
         if (!seen.add(n.endpointKey)) continue;
         fits.add(n);
