@@ -145,6 +145,9 @@ class AppState extends ChangeNotifier {
 
   /// К каким узлам подключаться при поиске: 'all' — ко всем подряд, 'reality' — только к Reality.
   String pickFrom = 'all';
+
+  /// 'all' — любые страны, 'noRu' — только узлы не из России (по имени узла).
+  String countries = 'all';
   Set<String> noFrag = {};
   String? pinnedId;
   String? lastNodeId;
@@ -394,6 +397,7 @@ class AppState extends ChangeNotifier {
     tunEngine = j['tunEngine'] == 'hev' ? 'hev' : 'xray';
     pickFrom = j['pickFrom'] == 'reality' ? 'reality' : 'all';
     autoFaster = j['autoFaster'] != false;
+    countries = j['countries'] == 'noRu' ? 'noRu' : 'all';
     noFrag = ((j['noFrag'] as List?) ?? const []).map((e) => e.toString()).toSet();
     pinnedId = j['pinnedId'] as String?;
     lastNodeId = j['lastNodeId'] as String?;
@@ -432,6 +436,7 @@ class AppState extends ChangeNotifier {
         'tunEngine': tunEngine,
         'pickFrom': pickFrom,
         'autoFaster': autoFaster,
+        'countries': countries,
         'noFrag': noFrag.take(800).toList(),
         'pinnedId': pinnedId,
         'lastNodeId': lastNodeId,
@@ -517,6 +522,11 @@ class AppState extends ChangeNotifier {
     if (!v) stopHunt();
   }
 
+  void setCountries(String v) {
+    _set(() => countries = v);
+    log(v == 'noRu' ? 'Подключаться только к узлам не из России' : 'Подключаться к узлам любых стран');
+  }
+
   void setPickFrom(String v) {
     _set(() => pickFrom = v);
     log(v == 'reality' ? 'Подключаться только к живым Reality' : 'Подключаться к любым живым узлам');
@@ -553,6 +563,7 @@ class AppState extends ChangeNotifier {
       fragment = true;
       tunEngine = 'xray';
       pickFrom = 'all';
+      countries = 'all';
       pinnedId = null;
       excludes.clear();
       enabledOverrides.clear();
@@ -1193,6 +1204,7 @@ class AppState extends ChangeNotifier {
       for (final n in nodesBySource[s.id] ?? const <ProxyNode>[]) {
         if (hideInsecure && n.isInsecure) continue;
         if (pickFrom == 'reality' && !n.isReality) continue;
+        if (countries == 'noRu' && n.place.code == 'RU') continue;
         if (isDead(n.id)) continue;
         if (!seen.add(n.endpointKey)) continue;
         fits.add(n);

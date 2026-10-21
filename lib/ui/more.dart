@@ -44,7 +44,7 @@ class _MoreIndex extends StatelessWidget {
     final p = PaletteScope.of(context);
     final rows = [
       (SettingsPage.look, 'Оформление', skinMeta[s.skin]!.$1),
-      (SettingsPage.link, 'Подключение', 'Режим ${modeMeta[s.mode]!.$1}${s.pickFrom == 'reality' ? ', только Reality' : ''}, работа в фоне'),
+      (SettingsPage.link, 'Подключение', 'Режим ${modeMeta[s.mode]!.$1}${s.pickFrom == 'reality' ? ', только Reality' : ''}${s.countries == 'noRu' ? ', без RU' : ''}, работа в фоне'),
       (SettingsPage.apps, 'Мимо узла', s.excludes.isEmpty ? 'Приложения без туннеля' : 'Выбрано: ${s.excludes.length}'),
       (SettingsPage.safe, 'Безопасность', 'DNS ${dnsMeta[s.dns]} и скрытие слабых узлов'),
       (SettingsPage.probe, 'Проверка узлов', probeMeta[s.probe]!.$1),
@@ -213,6 +213,23 @@ class _LinkPageState extends State<_LinkPage> with WidgetsBindingObserver {
               ? 'Кнопка и «Найти рабочий узел» выбирают только среди Reality, и только среди ответивших на проверку. '
                   'Reality маскируется под обычный сайт, такие узлы дольше живут под блокировками.'
               : 'Берём самый быстрый из ответивших, любого протокола: VLESS, Trojan, Shadowsocks, Hysteria2.',
+          style: p.text(14, color: p.muted),
+        ),
+        const SizedBox(height: 16),
+        const SectionTitle('Страны узлов'),
+        const SizedBox(height: 8),
+        Segment<String>(
+          value: s.countries,
+          onChanged: s.setCountries,
+          options: const [('all', 'Все серверы'), ('noRu', 'Только не из России')],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          s.countries == 'noRu'
+              ? 'Российские узлы пропускаются при подключении, автопереключении и поиске быстрее. Страну узнаём по имени узла; '
+                  'узлы без страны в имени не отсеиваются. При белых списках (БС) рабочие узлы часто именно российские — '
+                  'если не находится ничего, верните «Все серверы».'
+              : 'Подключаемся к узлам любых стран, включая российские.',
           style: p.text(14, color: p.muted),
         ),
         const SizedBox(height: 16),
