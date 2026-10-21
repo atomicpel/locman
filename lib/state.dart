@@ -747,49 +747,124 @@ class AppState extends ChangeNotifier {
   }
 
   /// Добавить свой источник: ссылка подписки или ключи (по одному в строке).
+  /// Разбор вставленного текста: (ссылки подписок, строки ключей, число зашифрованных ссылок Happ).
+  static (List<String>, List<String>, int) splitImport(String input) {
+    final urls = <String>[];
+    final keyLines = <String>[];
+    var crypt = 0;
+    final tokens = RegExp(r'[A-Za-z][A-Za-z0-9+.-]*://[^\s"<>]+').allMatches(input).map((m) => m.group(0)!);
+    for (var t in tokens) {
+      t = t.replaceAll(RegExp(r'[),.;]+$'), '');
+      final lower = t.toLowerCase();
+      if (lower.startsWith('happ://add/')) {
+        t = pctDecode(t.substring(11));
+      } else if (lower.startsWith('happ://')) {
+        crypt++;
+        continue;
+      }
+      if (RegExp(r'^https?://', caseSensitive: false).hasMatch(t)) {
+        if (!urls.contains(t)) urls.add(t);
+      } else {
+        keyLines.add(t);
+      }
+    }
+    // Не нашли схем — может, это base64-подписка, вставленная целиком.
+    if (urls.isEmpty && keyLines.isEmpty && crypt == 0) {
+      final decoded = decodeBase64(input);
+      if (decoded != null && decoded.contains('://')) keyLines.addAll(decoded.split(RegExp(r'\s+')));
+    }
+    return (urls, keyLines, crypt);
+  }
+
+  /// Добавить свои источники: можно вставить сразу много — ссылки подписок (каждая станет
+  /// отдельным источником) вперемешку с ключами vless://… (они соберутся в один источник).
+  /// Понимает и ссылки импорта вида happ://add/https://…
   Future<String?> addMine(String text, String name) async {
     final input = text.trim();
-    if (input.isEmpty) return 'Вставьте ссылку подписки или ключи';
-    final lines = input.split(RegExp(r'\s+')).where((l) => l.isNotEmpty).toList();
-    final isUrl = lines.length == 1 && RegExp(r'^https?://', caseSensitive: false).hasMatch(lines.first);
-    String? links;
-    if (!isUrl) {
-      var body = input;
-      if (!body.contains('://')) body = decodeBase64(body) ?? body;
-      final parsed = SubscriptionParser.parse(body, 'probe');
-      if (parsed.nodes.isEmpty) return 'Не нашёл ни одного ключа vless, vmess, trojan, ss или hy2';
-      links = parsed.nodes.map((n) => n.raw).join('\n');
+    if (input.isEmpty) return 'Вставьте ссылки подписок или ключи';
+
+    final split = splitImport(input);
+    final urls = split.$1;
+    final keyLines = split.$2;
+    final crypt = split.$3;
+
+    final added = <Source>[];
+    var duplicates = 0;
+    final single = urls.length + (keyLines.isEmpty ? 0 : 1) == 1;
+
+    for (final url in urls) {
+      final id = 'mine-${stableId(url)}';
+      if (mine.any((m) => m.id == id) || added.any((m) => m.id == id)) {
+        duplicates++;
+        continue;
+      }
+      added.add(Source(
+        id: id,
+        title: single && name.trim().isNotEmpty ? name.trim() : (Uri.tryParse(url)?.host ?? 'Моя подписка'),
+        author: 'Вы',
+        homepage: '',
+        license: 'своё',
+        description: 'Подписка по ссылке',
+        mode: 'any',
+        mirrors: [url],
+        origin: 'mine',
+      ));
     }
-    final id = 'mine-${stableId(isUrl ? lines.first : links!)}';
-    if (mine.any((s) => s.id == id)) return 'Такой источник уже есть';
-    final title = name.trim().isNotEmpty
-        ? name.trim()
-        : (isUrl ? (Uri.tryParse(lines.first)?.host ?? 'Моя подписка') : 'Мои ключи');
-    final source = Source(
-      id: id,
-      title: title,
-      author: 'Вы',
-      homepage: '',
-      license: 'своё',
-      description: isUrl ? 'Подписка по ссылке' : 'Ключи, вставленные вручную',
-      mode: 'any',
-      mirrors: isUrl ? [lines.first] : const [],
-      origin: 'mine',
-      links: links,
-    );
+
+    var keys = 0;
+    if (keyLines.isNotEmpty) {
+      final parsed = SubscriptionParser.parse(keyLines.join('\n'), 'probe');
+      if (parsed.nodes.isNotEmpty) {
+        final links = parsed.nodes.map((n) => n.raw).join('\n');
+        final id = 'mine-${stableId(links)}';
+        if (mine.any((m) => m.id == id)) {
+          duplicates++;
+        } else {
+          keys = parsed.nodes.length;
+          added.add(Source(
+            id: id,
+            title: single && name.trim().isNotEmpty ? name.trim() : 'Мои ключи',
+            author: 'Вы',
+            homepage: '',
+            license: 'своё',
+            description: 'Ключи, вставленные вручную',
+            mode: 'any',
+            mirrors: const [],
+            origin: 'mine',
+            links: links,
+          ));
+        }
+      }
+    }
+
+    if (added.isEmpty) {
+      if (crypt > 0) {
+        return 'Это зашифрованные ссылки Happ (happ://crypt…): их может открыть только Happ. '
+            'Попросите у владельца подписки обычную ссылку https://…';
+      }
+      if (duplicates > 0) return 'Эти источники уже добавлены';
+      return 'Не нашёл ни ссылок подписок, ни ключей vless, vmess, trojan, ss или hy2';
+    }
+
     _set(() {
-      mine.insert(0, source);
+      mine.insertAll(0, added);
       tab = AppTab.sources;
     });
-    if (links != null) {
-      nodesBySource[id] = SubscriptionParser.parse(links, id).nodes;
-      sourceInfo[id] = SourceInfo(updatedAt: DateTime.now().millisecondsSinceEpoch);
-      notifyListeners();
-    } else {
-      await refreshSource(source);
+    for (final src in added.where((x) => x.links != null)) {
+      nodesBySource[src.id] = SubscriptionParser.parse(src.links!, src.id).nodes;
+      sourceInfo[src.id] = SourceInfo(updatedAt: DateTime.now().millisecondsSinceEpoch);
     }
-    log('Добавлен «$title»');
-    flash('Источник добавлен');
+    notifyListeners();
+    final subs = added.where((x) => x.hasUrl).toList();
+    final parts = [
+      if (subs.isNotEmpty) 'подписок: ${subs.length}',
+      if (keys > 0) 'ключей: $keys',
+      if (duplicates > 0) 'уже были: $duplicates',
+      if (crypt > 0) 'зашифрованных Happ пропущено: $crypt',
+    ];
+    log('Добавлено — ${parts.join(', ')}');
+    flash('Добавлено — ${parts.join(', ')}');
+    unawaited(_refreshMany(subs));
     return null;
   }
 

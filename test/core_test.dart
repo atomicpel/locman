@@ -7,6 +7,7 @@ import 'package:locman/core/link_parser.dart';
 import 'package:locman/core/node.dart';
 import 'package:locman/core/subscription.dart';
 import 'package:locman/core/xray_config.dart';
+import 'package:locman/state.dart';
 
 const vless = 'vless://11111111-2222-3333-4444-555555555555@95.163.1.2:443'
     '?security=reality&sni=ok.ru&pbk=AbC-dEf_123&sid=ab12&fp=chrome&type=xhttp&path=%2Fapi&flow='
@@ -226,5 +227,14 @@ void main() {
   test('плюсы в имени — это пробелы', () {
     final n = LinkParser.parse('trojan://p@1.2.3.4:443#%F0%9F%9B%A1+Белый+список+РФ+%2302')!;
     expect(n.name, '🛡 Белый список РФ #02');
+  });
+
+  test('много ссылок разом: подписки по отдельности, ключи вместе', () {
+    final (urls, keys, crypt) = AppState.splitImport(
+        'https://a.example.com/sub/1\nкакой-то текст\nhapp://add/https%3A%2F%2Fb.example.com%2Fs\n$vless\n'
+        'trojan://p@1.2.3.4:443#t\nhapp://crypt5/abc');
+    expect(urls, ['https://a.example.com/sub/1', 'https://b.example.com/s']);
+    expect(keys.length, 2);
+    expect(crypt, 1);
   });
 }
