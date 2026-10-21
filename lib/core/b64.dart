@@ -36,11 +36,28 @@ String stableId(String seed) {
   return hi.toRadixString(16).padLeft(8, '0') + lo.toRadixString(16).padLeft(8, '0');
 }
 
-/// Процентное декодирование без исключений.
+/// Процентное декодирование без исключений; обычные символы (в том числе кириллица)
+/// остаются как есть, %XX собираются в байты UTF-8.
 String pctDecode(String s) {
-  try {
-    return Uri.decodeComponent(s);
-  } catch (_) {
-    return s;
+  if (!s.contains('%')) return s;
+  final bytes = <int>[];
+  for (var i = 0; i < s.length; i++) {
+    final c = s.codeUnitAt(i);
+    if (c == 0x25 && i + 2 < s.length) {
+      final v = int.tryParse(s.substring(i + 1, i + 3), radix: 16);
+      if (v != null) {
+        bytes.add(v);
+        i += 2;
+        continue;
+      }
+    }
+    // Обычный символ (с учётом суррогатных пар) — в UTF-8.
+    if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length) {
+      bytes.addAll(utf8.encode(s.substring(i, i + 2)));
+      i++;
+    } else {
+      bytes.addAll(utf8.encode(String.fromCharCode(c)));
+    }
   }
+  return utf8.decode(bytes, allowMalformed: true);
 }
