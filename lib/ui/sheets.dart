@@ -104,6 +104,16 @@ Future<void> showNodeSheet(BuildContext context, AppState s, ProxyNode node) => 
             Navigator.pop(ctx);
             s.connect(nodeId: node.id);
           }),
+          if (s.isBanned(node))
+            _sheetButton(p, Icons.undo_rounded, 'Убрать из чёрного списка', () {
+              Navigator.pop(ctx);
+              s.unban(node);
+            })
+          else
+            _sheetButton(p, Icons.block_rounded, 'В чёрный список', () {
+              Navigator.pop(ctx);
+              s.ban(node);
+            }, danger: true),
           _sheetButton(p, Icons.copy_rounded, 'Копировать ключ', () {
             Clipboard.setData(ClipboardData(text: node.raw));
             Navigator.pop(ctx);

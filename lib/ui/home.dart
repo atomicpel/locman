@@ -77,6 +77,24 @@ class HomeScreen extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: p.text(14, color: p.muted),
           ),
+          if (on && node != null)
+            Center(
+              child: Pressable(
+                onTap: () => s.ban(node),
+                label: 'Сервер в чёрный список',
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.block_rounded, size: 14, color: p.danger),
+                      const SizedBox(width: 4),
+                      Text('В чёрный список', style: p.text(13, weight: FontWeight.w500, color: p.danger)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
         if (on && s.huntStatus != null) ...[
           const SizedBox(height: 10),

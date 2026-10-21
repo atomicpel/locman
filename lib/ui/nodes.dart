@@ -63,6 +63,12 @@ class _NodesScreenState extends State<NodesScreen> {
       items.add(_GroupTitle(title: 'Не отвечают', count: dead.length, open: open, onTap: () => s.toggleCollapsed('dead')));
       if (open) items.add(_Rows(s: s, nodes: dead));
     }
+    final banned = s.bannedNodes();
+    if (banned.isNotEmpty) {
+      final open = !(s.collapsed['banned'] ?? true);
+      items.add(_GroupTitle(title: 'Чёрный список', count: banned.length, open: open, onTap: () => s.toggleCollapsed('banned')));
+      if (open) items.add(_Rows(s: s, nodes: banned));
+    }
 
     return CustomScrollView(
       slivers: [

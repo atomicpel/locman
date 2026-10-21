@@ -148,6 +148,9 @@ class AppState extends ChangeNotifier {
 
   /// 'all' — любые страны, 'noRu' — только узлы не из России (по имени узла).
   String countries = 'all';
+
+  /// Чёрный список серверов (адрес:порт): к ним не подключаемся ни из какой подписки.
+  Set<String> banned = {};
   Set<String> noFrag = {};
   String? pinnedId;
   String? lastNodeId;
@@ -398,6 +401,7 @@ class AppState extends ChangeNotifier {
     pickFrom = j['pickFrom'] == 'reality' ? 'reality' : 'all';
     autoFaster = j['autoFaster'] != false;
     countries = j['countries'] == 'noRu' ? 'noRu' : 'all';
+    banned = ((j['banned'] as List?) ?? const []).map((e) => e.toString()).toSet();
     noFrag = ((j['noFrag'] as List?) ?? const []).map((e) => e.toString()).toSet();
     pinnedId = j['pinnedId'] as String?;
     lastNodeId = j['lastNodeId'] as String?;
@@ -437,6 +441,7 @@ class AppState extends ChangeNotifier {
         'pickFrom': pickFrom,
         'autoFaster': autoFaster,
         'countries': countries,
+        'banned': banned.toList(),
         'noFrag': noFrag.take(800).toList(),
         'pinnedId': pinnedId,
         'lastNodeId': lastNodeId,
@@ -943,6 +948,53 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  static String banKey(ProxyNode n) => '${n.address.toLowerCase()}:${n.port}';
+
+  bool isBanned(ProxyNode n) => banned.contains(banKey(n));
+
+  /// В чёрный список: сервер больше не участвует в подключении, поиске и автопереключении.
+  /// Если через него сейчас идёт трафик — сразу ищем другой.
+  void ban(ProxyNode n) {
+    _set(() {
+      banned.add(banKey(n));
+      if (pinnedId == n.id) pinnedId = null;
+    });
+    log('В чёрный список: ${n.title} (${banKey(n)})');
+    if (phase == Phase.on && activeId == n.id) {
+      flash('${n.title} в чёрном списке — ищем другой узел');
+      unawaited(connect(ignorePin: true));
+    } else {
+      flash('${n.title} — в чёрном списке');
+      _pushBackups();
+    }
+  }
+
+  void unban(ProxyNode n) {
+    _set(() => banned.remove(banKey(n)));
+    log('Из чёрного списка: ${n.title}');
+    flash('${n.title} убран из чёрного списка');
+  }
+
+  void clearBans() {
+    final count = banned.length;
+    _set(() => banned.clear());
+    log('Чёрный список очищен ($count)');
+    flash('Чёрный список очищен');
+  }
+
+  /// Узлы из чёрного списка (для отдельной группы на вкладке «Узлы»).
+  List<ProxyNode> bannedNodes() {
+    final out = <ProxyNode>[];
+    final seen = <String>{};
+    for (final s in allSources) {
+      if (!isEnabled(s)) continue;
+      for (final n in nodesBySource[s.id] ?? const <ProxyNode>[]) {
+        if (isBanned(n) && seen.add(n.id)) out.add(n);
+      }
+    }
+    return out;
+  }
+
   List<ProxyNode> visibleNodes() {
     final out = <ProxyNode>[];
     final seen = <String>{};
@@ -950,6 +1002,7 @@ class AppState extends ChangeNotifier {
       if (!isEnabled(s)) continue;
       for (final n in nodesBySource[s.id] ?? const <ProxyNode>[]) {
         if (hideInsecure && n.isInsecure) continue;
+        if (banned.isNotEmpty && isBanned(n)) continue;
         if (!seen.add(hideDupes ? n.endpointKey : n.id)) continue;
         out.add(n);
       }
@@ -1279,6 +1332,7 @@ class AppState extends ChangeNotifier {
       for (final n in nodesBySource[s.id] ?? const <ProxyNode>[]) {
         if (hideInsecure && n.isInsecure) continue;
         if (pickFrom == 'reality' && !n.isReality) continue;
+        if (banned.isNotEmpty && isBanned(n)) continue;
         if (countries == 'noRu' && n.place.code == 'RU') continue;
         if (isDead(n.id)) continue;
         if (!seen.add(n.endpointKey)) continue;
@@ -1336,6 +1390,7 @@ class AppState extends ChangeNotifier {
       chosen = nodeById(nodeId);
     } else if (!ignorePin && pinnedId != null) {
       chosen = nodeById(pinnedId);
+      if (chosen != null && isBanned(chosen)) chosen = null;
     }
 
     for (var attempt = 0; attempt < 4; attempt++) {

@@ -490,6 +490,20 @@ class _ProbePage extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         SettingRow(
+          title: 'Чёрный список серверов',
+          line: s.banned.isEmpty
+              ? 'Пусто. Добавить сервер — кнопка «В чёрный список» на главной или в карточке узла.'
+              : 'Серверов: ${s.banned.length}. Они не участвуют в подключении, поиске и автопереключении. '
+                  'Посмотреть и убрать по одному — вкладка «Узлы», группа «Чёрный список».',
+          control: s.banned.isEmpty
+              ? null
+              : TextButton(
+                  onPressed: s.clearBans,
+                  child: Text('Очистить', style: p.text(14, color: p.danger)),
+                ),
+        ),
+        const SizedBox(height: 16),
+        SettingRow(
           title: 'Скрывать дубли',
           line: 'Один и тот же сервер из разных подписок — одна строка.',
           control: PillSwitch(on: s.hideDupes, onChanged: s.setHideDupes),
