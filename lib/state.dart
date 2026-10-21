@@ -57,6 +57,15 @@ const seekLabels = ['Смотрим сеть', 'Стучимся по TCP', 'П�
 const repo = 'atomicpel/locman';
 const testUrl = 'https://www.gstatic.com/generate_204';
 
+/// Предложение переключиться на узел быстрее.
+class Offer {
+  Offer(this.node, this.speed, this.currentSpeed, this.delay);
+  final ProxyNode node;
+  final int speed;
+  final int currentSpeed;
+  final int delay;
+}
+
 class NodeCheck {
   NodeCheck(this.delay, this.at, this.fails, this.real);
   final int delay;
@@ -156,6 +165,14 @@ class AppState extends ChangeNotifier {
   final Set<String> refreshing = {};
   NetKind? detected;
   UpdateInfo? update;
+
+  /// Фоновый поиск узла быстрее текущего.
+  bool autoFaster = true;
+  String? huntStatus;
+  Offer? offer;
+  int _huntGen = 0;
+  final Set<String> _huntSeen = {};
+  int _huntBar = 0;
 
   /// Внешний адрес после подключения (2ip / ip-api / ipwho.is).
   IpInfo? ipInfo;
@@ -378,6 +395,7 @@ class AppState extends ChangeNotifier {
     fragment = pick('fragment', true);
     tunEngine = j['tunEngine'] == 'hev' ? 'hev' : 'xray';
     pickFrom = j['pickFrom'] == 'reality' ? 'reality' : 'all';
+    autoFaster = j['autoFaster'] != false;
     noFrag = ((j['noFrag'] as List?) ?? const []).map((e) => e.toString()).toSet();
     pinnedId = j['pinnedId'] as String?;
     lastNodeId = j['lastNodeId'] as String?;
@@ -415,6 +433,7 @@ class AppState extends ChangeNotifier {
         'fragment': fragment,
         'tunEngine': tunEngine,
         'pickFrom': pickFrom,
+        'autoFaster': autoFaster,
         'noFrag': noFrag.take(800).toList(),
         'pinnedId': pinnedId,
         'lastNodeId': lastNodeId,
@@ -495,6 +514,11 @@ class AppState extends ChangeNotifier {
   void setHideDupes(bool v) => _set(() => hideDupes = v);
   void setFragment(bool v) => _set(() => fragment = v);
   void setTunEngine(String v) => _set(() => tunEngine = v);
+  void setAutoFaster(bool v) {
+    _set(() => autoFaster = v);
+    if (!v) stopHunt();
+  }
+
   void setPickFrom(String v) {
     _set(() => pickFrom = v);
     log(v == 'reality' ? 'Подключаться только к живым Reality' : 'Подключаться к любым живым узлам');
@@ -991,6 +1015,131 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // ---------- Поиск узла быстрее ----------
+
+  void stopHunt() {
+    _huntGen++;
+    huntStatus = null;
+    offer = null;
+  }
+
+  /// Проверяем остальные узлы в фоне: сначала задержку, потом настоящую скорость
+  /// у лучших по задержке. Нашли заметно быстрее текущего — предлагаем переключиться.
+  Future<void> _hunt() async {
+    final gen = ++_huntGen;
+    bool stale() => gen != _huntGen || phase != Phase.on;
+    final current = nodeById(activeId);
+    if (current == null) return;
+    await Future.delayed(const Duration(seconds: 3));
+    if (stale()) return;
+
+    final cands = _candidates(_kindForMode()).where((n) => !_huntSeen.contains(n.id)).take(200).toList();
+    if (cands.isEmpty) {
+      huntStatus = null;
+      flash('Других живых узлов не осталось');
+      notifyListeners();
+      return;
+    }
+    var checked = 0;
+    huntStatus = 'Ищем узел быстрее: 0 из ${cands.length}';
+    notifyListeners();
+    final delays = <ProxyNode, int>{};
+    final gate = _Gate(probeMeta[probe]!.$2);
+    await _pool(cands, 32, (n) async {
+      if (stale()) return;
+      if (!n.coreOnly && await Net.tcping(n.address, n.port, timeout: const Duration(milliseconds: 1500)) < 0) {
+        _record(n.id, -1, real: false);
+      } else {
+        final d = await gate.run(() async => stale() ? 0 : await _realTest(n));
+        if (d != 0) _record(n.id, d, real: true);
+        if (d > 0) delays[n] = d;
+      }
+      checked++;
+      if (!stale()) {
+        huntStatus = 'Ищем узел быстрее: $checked из ${cands.length}';
+        _throttledNotify();
+      }
+    });
+    unawaited(_saveHealth());
+    if (stale()) return;
+    _huntSeen.addAll(cands.map((n) => n.id));
+
+    // Скорость: текущий через туннель, лучшие 4 по задержке — каждый через отдельный экземпляр ядра.
+    huntStatus = 'Меряем скорость лучших узлов';
+    notifyListeners();
+    final mine = await Net.speedTest();
+    if (stale()) return;
+    final top = (delays.entries.toList()..sort((a, b) => a.value.compareTo(b.value))).take(4).toList();
+    ProxyNode? best;
+    var bestSpeed = 0;
+    for (final e in top) {
+      if (stale()) return;
+      final sp = await _speedOf(e.key);
+      if (sp > bestSpeed) {
+        bestSpeed = sp;
+        best = e.key;
+      }
+    }
+    if (stale()) return;
+    huntStatus = null;
+    final bar = max(mine, _huntBar);
+    if (best != null && bestSpeed > bar * 1.3 && bestSpeed - bar > 256 * 1024) {
+      offer = Offer(best, bestSpeed, mine, delays[best] ?? 0);
+      log('Нашёл быстрее: ${best.title} ${formatRate(bestSpeed)} (сейчас ${formatRate(mine)})');
+    } else {
+      log('Быстрее текущего не нашлось (сейчас ${formatRate(mine)})');
+      flash('Текущий узел — самый быстрый из проверенных');
+    }
+    notifyListeners();
+  }
+
+  /// Скорость скачивания через узел, байт/с; 0 — не смогли.
+  Future<int> _speedOf(ProxyNode n) async {
+    final local = LocalProxy(
+      socksPort: await Net.freePort(),
+      httpPort: await Net.freePort(),
+      user: Net.token(12),
+      pass: Net.token(24),
+    );
+    final config = XrayConfig.build(n, local: local, directRu: false, dns: dns, fragment: _fragFor(n));
+    int? id;
+    try {
+      id = await Native.probeStart(config);
+      if (id == null) return 0;
+      await Future.delayed(const Duration(milliseconds: 400));
+      return await Net.speedTest(proxy: local);
+    } catch (_) {
+      return 0;
+    } finally {
+      if (id != null) unawaited(Native.probeStop(id).catchError((_) {}));
+    }
+  }
+
+  void acceptOffer() {
+    final o = offer;
+    if (o == null) return;
+    offer = null;
+    log('Переключаемся на ${o.node.title}');
+    unawaited(connect(nodeId: o.node.id));
+  }
+
+  /// Оставить текущий и искать дальше — среди ещё не проверенных, быстрее предложенного.
+  void keepAndSearch() {
+    final o = offer;
+    offer = null;
+    if (o != null) {
+      _huntSeen.add(o.node.id);
+      _huntBar = max(_huntBar, o.speed);
+    }
+    notifyListeners();
+    unawaited(_hunt());
+  }
+
+  void dismissOffer() {
+    stopHunt();
+    notifyListeners();
+  }
+
   /// Проверка адреса через туннель: IP, место, провайдер.
   Future<void> refreshIp() async {
     if (ipLoading) return;
@@ -1013,6 +1162,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> disconnect() async {
     _seekGen++;
+    stopHunt();
     ipInfo = null;
     ipError = null;
     final n = nodeById(activeId);
@@ -1059,6 +1209,7 @@ class AppState extends ChangeNotifier {
   Future<void> connect({bool ignorePin = false, String? nodeId}) async {
     final token = ++_seekGen;
     bool cancelled() => token != _seekGen;
+    stopHunt();
 
     if (!allSources.any(isEnabled)) {
       _fail('Нет включённых источников');
@@ -1131,31 +1282,31 @@ class AppState extends ChangeNotifier {
     seekStep = 2;
     notifyListeners();
     _smokeSink?.call('seek pool=${pool.length}');
-    final tcp = <ProxyNode, int>{};
-    await _pool(pool, _tcpParallel, (n) async {
-      if (cancelled()) return;
-      tcp[n] = (n.coreOnly || _skipTcp) ? 0 : await Net.tcping(n.address, n.port);
-      if (tcp[n]! < 0) _record(n.id, -1, real: false);
-    });
-    if (cancelled()) return null;
-
-    seekStep = 3;
-    notifyListeners();
-    final alive = tcp.entries.where((e) => e.value >= 0).toList()..sort((a, b) => a.value.compareTo(b.value));
-    final shortlist = alive.take(24).map((e) => e.key).toList();
-    _smokeSink?.call('tcp alive=${alive.length} shortlist=${shortlist.length}');
-    final real = <ProxyNode, int>{};
-    await _pool(shortlist, probeMeta[probe]!.$2, (n) async {
-      if (cancelled()) return;
-      _smokeSink?.call('measure ${n.protocol.title} ${n.transportLabel} ${n.address}');
-      final d = await _realTest(n);
-      _smokeSink?.call('measured ${n.address} = $d');
+    // Конвейер «кто первый»: узел, ответивший по TCP, сразу идёт на настоящую проверку,
+    // и первый прошедший её — наш. Самый быстрый ищется потом, в фоне (_hunt).
+    final done = Completer<ProxyNode?>();
+    final gate = _Gate(probeMeta[probe]!.$2);
+    unawaited(_pool(pool, _tcpParallel, (n) async {
+      if (cancelled() || done.isCompleted) return;
+      final tcp = (n.coreOnly || _skipTcp) ? 0 : await Net.tcping(n.address, n.port);
+      if (tcp < 0) {
+        _record(n.id, -1, real: false);
+        return;
+      }
+      if (seekStep < 3) {
+        seekStep = 3;
+        notifyListeners();
+      }
+      final d = await gate.run(() async => (cancelled() || done.isCompleted) ? 0 : await _realTest(n));
+      if (d == 0) return;
       _record(n.id, d, real: true);
-      if (d > 0) real[n] = d;
-    });
-    unawaited(_saveHealth());
-    if (cancelled() || real.isEmpty) return null;
-    return real.entries.reduce((a, b) => a.value <= b.value ? a : b).key;
+      if (d > 0 && !done.isCompleted) done.complete(n);
+    }).then((_) {
+      if (!done.isCompleted) done.complete(null);
+      unawaited(_saveHealth());
+    }));
+    final first = await done.future;
+    return cancelled() ? null : first;
   }
 
   /// Поднимаем туннель через узел и проверяем, что трафик идёт.
@@ -1237,6 +1388,12 @@ class AppState extends ChangeNotifier {
     _probeFails = 0;
     _save();
     unawaited(refreshIp());
+    _huntSeen
+      ..clear()
+      ..add(n.id);
+    _huntBar = 0;
+    offer = null;
+    if (autoFaster && info?.smoke != true) unawaited(_hunt());
     final kind = detected == null ? '' : ' · ${detected == NetKind.white ? 'БС' : 'ЧС'}';
     final ms = latencyOf(n.id);
     log('${n.title} · ${n.protocol.title}${ms > 0 ? ' · $ms мс' : ''}$kind');

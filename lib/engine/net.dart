@@ -339,6 +339,50 @@ class Net {
     return IpInfo(ip: ip, source: 'cloudflare');
   }
 
+  /// Скорость скачивания, байт/с: через [proxy] (пробный экземпляр ядра) или через туннель.
+  static Future<int> speedTest({LocalProxy? proxy}) async {
+    final p = proxy ?? tunnel;
+    if (p == null) return 0;
+    const urls = [
+      'https://speed.cloudflare.com/__down?bytes=4000000',
+      'https://proof.ovh.net/files/10Mb.dat',
+    ];
+    for (final url in urls) {
+      final c = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 6)
+        ..userAgent = userAgent
+        ..findProxy = (_) => 'PROXY ${p.user}:${p.pass}@127.0.0.1:${p.httpPort}';
+      try {
+        final req = await c.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 8));
+        final resp = await req.close().timeout(const Duration(seconds: 8));
+        if (resp.statusCode != 200) continue;
+        final sw = Stopwatch();
+        var bytes = 0;
+        final sub = resp.listen((chunk) {
+          if (!sw.isRunning) sw.start();
+          bytes += chunk.length;
+        });
+        // Качаем не дольше 5 секунд и не больше 4 МБ.
+        final end = Completer<void>();
+        sub.onDone(() {
+          if (!end.isCompleted) end.complete();
+        });
+        sub.onError((Object _) {
+          if (!end.isCompleted) end.complete();
+        });
+        await Future.any([end.future, Future.delayed(const Duration(seconds: 5))]);
+        await sub.cancel();
+        final ms = sw.elapsedMilliseconds;
+        if (bytes > 64 * 1024 && ms > 0) return bytes * 1000 ~/ ms;
+      } catch (_) {
+        // следующий адрес
+      } finally {
+        c.close(force: true);
+      }
+    }
+    return 0;
+  }
+
   /// IPv4 домена через DNS-over-HTTPS — мимо подменённого DNS оператора.
   static Future<List<String>> resolveDoh(String host) async {
     final name = Uri.encodeQueryComponent(host);

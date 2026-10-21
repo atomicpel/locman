@@ -216,6 +216,13 @@ class _LinkPageState extends State<_LinkPage> with WidgetsBindingObserver {
           style: p.text(14, color: p.muted),
         ),
         const SizedBox(height: 16),
+        SettingRow(
+          title: 'Искать узел быстрее в фоне',
+          line: 'Сразу подключаемся к первому ответившему узлу, а потом проверяем остальные и меряем скорость лучших. '
+              'Нашли заметно быстрее — предложим переключиться. Тратит около 15–20 МБ за поиск.',
+          control: PillSwitch(on: s.autoFaster, onChanged: s.setAutoFaster),
+        ),
+        const SizedBox(height: 16),
         const SectionTitle('Движок туннеля'),
         const SizedBox(height: 8),
         Segment<String>(

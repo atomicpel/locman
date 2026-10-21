@@ -78,6 +78,27 @@ class HomeScreen extends StatelessWidget {
             style: p.text(14, color: p.muted),
           ),
         ],
+        if (on && s.huntStatus != null) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5, color: p.muted)),
+              const SizedBox(width: 8),
+              Flexible(child: Text(s.huntStatus!, style: p.text(13, color: p.muted))),
+              const SizedBox(width: 8),
+              Pressable(
+                onTap: s.dismissOffer,
+                label: 'Остановить поиск',
+                child: Icon(Icons.close_rounded, size: 16, color: p.muted),
+              ),
+            ],
+          ),
+        ],
+        if (on && s.offer != null) ...[
+          const SizedBox(height: 16),
+          _OfferCard(s: s),
+        ],
         const SizedBox(height: 24),
         Row(children: [
           Expanded(child: StatTile('Вниз', on ? formatRate(s.down) : '—')),
@@ -399,4 +420,48 @@ class _IpCard extends StatelessWidget {
 
 extension on String {
   String ifEmpty(String other) => isEmpty ? other : this;
+}
+
+/// «Нашёл быстрее» — переключиться или оставить текущий и искать дальше.
+class _OfferCard extends StatelessWidget {
+  const _OfferCard({required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    final o = s.offer!;
+    return Panel(
+      highlight: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.bolt_rounded, color: p.accent, size: 20),
+              const SizedBox(width: 6),
+              Expanded(child: Text('Нашёл узел быстрее', style: p.text(16, weight: FontWeight.w600))),
+              Pressable(
+                onTap: s.dismissOffer,
+                label: 'Закрыть',
+                child: Icon(Icons.close_rounded, size: 18, color: p.muted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('${o.node.place.city ?? o.node.title} · ${o.node.protocol.title} · ${o.node.transportLabel}',
+              style: p.text(15, weight: FontWeight.w500)),
+          const SizedBox(height: 4),
+          Text(
+            '${formatRate(o.speed)}${o.delay > 0 ? ' · ${o.delay} мс' : ''}   ·   сейчас ${formatRate(o.currentSpeed)}',
+            style: p.text(14, color: p.muted),
+          ),
+          const SizedBox(height: 12),
+          PillButton(label: 'Переключиться', primary: true, onTap: s.acceptOffer),
+          const SizedBox(height: 8),
+          PillButton(label: 'Оставить текущий и искать дальше', onTap: s.keepAndSearch),
+        ],
+      ),
+    );
+  }
 }

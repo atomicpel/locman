@@ -162,6 +162,16 @@ class MainActivity : FlutterActivity() {
                 async(result) { XrayEngine.measureDelay(config, url).toInt() }
             }
 
+            "probeStart" -> {
+                val config = call.argument<String>("config")!!
+                async(result) { XrayEngine.startProbe(config) }
+            }
+
+            "probeStop" -> {
+                val id = call.argument<Int>("id")!!
+                async(result) { XrayEngine.stopProbe(id); null }
+            }
+
             "apps" -> async(result) { Apps.list(this) }
 
             "appIcon" -> {

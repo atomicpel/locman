@@ -62,6 +62,24 @@ object XrayEngine {
         lastError = null
     }.onFailure { lastError = (it.cause ?: it).message }
 
+    private val probes = java.util.concurrent.ConcurrentHashMap<Int, Any>()
+    private val probeIds = java.util.concurrent.atomic.AtomicInteger(1)
+
+    /** Отдельный экземпляр ядра (без TUN) для замера скорости узла. */
+    fun startProbe(config: String): Int? = runCatching {
+        ready.await(10, TimeUnit.SECONDS)
+        check(isAvailable)
+        val c = launch(config, 0)
+        val id = probeIds.getAndIncrement()
+        probes[id] = c
+        id
+    }.getOrNull()
+
+    fun stopProbe(id: Int) {
+        val c = probes.remove(id) ?: return
+        runCatching { c.javaClass.methods.first { it.name == "stopLoop" }.invoke(c) }
+    }
+
     /** Байты через все выходы с прошлого вызова: (вверх, вниз). Нужен "stats" в конфиге. */
     fun trafficDelta(): Pair<Long, Long> {
         val c = controller ?: return 0L to 0L

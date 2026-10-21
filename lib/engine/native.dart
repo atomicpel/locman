@@ -145,6 +145,10 @@ class Native {
     }
   }
 
+  /// Отдельный экземпляр ядра для замера скорости узла; вернёт номер или null.
+  static Future<int?> probeStart(String config) => _core.invokeMethod<int>('probeStart', {'config': config});
+  static Future<void> probeStop(int id) => _core.invokeMethod('probeStop', {'id': id});
+
   static Future<List<InstalledApp>> apps() async {
     final list = (await _core.invokeMethod<List>('apps')) ?? const [];
     return list.whereType<Map>().map((m) => InstalledApp(m['package'] as String, m['label'] as String)).toList();
