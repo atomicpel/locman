@@ -1,6 +1,6 @@
 {
  "version": 1,
- "generatedAt": "2026-10-20T18:24:48+00:00",
+ "generatedAt": "2026-10-21T04:57:22+00:00",
  "sources": [
   {
    "id": "zieng2-universal",
@@ -20,15 +20,15 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 105,
-   "secure": 105,
+   "nodes": 117,
+   "secure": 117,
    "protocols": {
-    "vless": 105
+    "vless": 117
    },
-   "alive": null,
-   "hash": "b7876d19ab6a5ee7",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.86,
+   "hash": "f07b01d815cd4fd2",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -47,19 +47,19 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 972,
-   "secure": 972,
+   "nodes": 1478,
+   "secure": 1478,
    "protocols": {
-    "ss": 46,
-    "vless": 893,
-    "vmess": 17,
-    "trojan": 11,
-    "hysteria2": 5
+    "ss": 75,
+    "vless": 1317,
+    "trojan": 39,
+    "vmess": 43,
+    "hysteria2": 4
    },
-   "alive": null,
-   "hash": "df95f7845a1ba3e2",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.95,
+   "hash": "a7d1ceb7fc8323a1",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -79,15 +79,15 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 45,
-   "secure": 45,
+   "nodes": 13,
+   "secure": 13,
    "protocols": {
-    "vless": 45
+    "vless": 13
    },
-   "alive": null,
-   "hash": "d5ec6cd34f61f887",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 1.0,
+   "hash": "6c8807bf1923ba9a",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -107,15 +107,15 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 5,
-   "secure": 5,
+   "nodes": 49,
+   "secure": 49,
    "protocols": {
-    "vless": 5
+    "vless": 49
    },
-   "alive": null,
-   "hash": "3383368fd281d8b2",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 1.0,
+   "hash": "5fcae1c27d19c224",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -133,14 +133,14 @@
    ],
    "origin": "curated",
    "status": "empty",
-   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "error": "почти нет безопасных узлов",
    "nodes": 0,
    "secure": 0,
    "protocols": {},
    "alive": null,
-   "hash": "ebbd00bf1b070b52",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "hash": "bac495d31012f023",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": "2026-10-20T18:24:48+00:00",
    "recommended": false
   },
@@ -159,16 +159,16 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 8,
-   "secure": 8,
+   "nodes": 11,
+   "secure": 11,
    "protocols": {
-    "vless": 7,
+    "vless": 10,
     "vmess": 1
    },
-   "alive": null,
-   "hash": "b906c5b55884ef42",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 1.0,
+   "hash": "34b21da963d21434",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -185,13 +185,13 @@
    ],
    "origin": "curated",
    "status": "dead",
-   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "error": "HTTP Error 403: Forbidden",
    "nodes": 0,
    "secure": 0,
    "protocols": {},
    "alive": null,
    "hash": null,
-   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
    "changedAt": null,
    "failingSince": "2026-10-20T18:24:48+00:00",
    "recommended": true
@@ -209,13 +209,13 @@
    ],
    "origin": "curated",
    "status": "dead",
-   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "error": "HTTP Error 403: Forbidden",
    "nodes": 0,
    "secure": 0,
    "protocols": {},
    "alive": null,
    "hash": null,
-   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
    "changedAt": null,
    "failingSince": "2026-10-20T18:24:48+00:00",
    "recommended": true
@@ -233,13 +233,13 @@
    ],
    "origin": "curated",
    "status": "dead",
-   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "error": "HTTP Error 403: Forbidden",
    "nodes": 0,
    "secure": 0,
    "protocols": {},
    "alive": null,
    "hash": null,
-   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
    "changedAt": null,
    "failingSince": "2026-10-20T18:24:48+00:00",
    "recommended": true
@@ -260,15 +260,15 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 56,
-   "secure": 54,
+   "nodes": 136,
+   "secure": 130,
    "protocols": {
-    "vless": 56
+    "vless": 136
    },
-   "alive": null,
-   "hash": "de739876b1592331",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.95,
+   "hash": "8f80ad8db65358bb",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -287,17 +287,17 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 145,
-   "secure": 143,
+   "nodes": 143,
+   "secure": 141,
    "protocols": {
-    "vless": 58,
-    "vmess": 10,
-    "trojan": 77
+    "vless": 55,
+    "vmess": 12,
+    "trojan": 76
    },
-   "alive": null,
-   "hash": "ef7abdeb31c73c5d",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.95,
+   "hash": "fc3f6e62f81fbea4",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -316,17 +316,17 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 84,
-   "secure": 81,
+   "nodes": 98,
+   "secure": 94,
    "protocols": {
-    "hysteria2": 2,
-    "vmess": 10,
-    "trojan": 72
+    "hysteria2": 1,
+    "vmess": 18,
+    "trojan": 79
    },
-   "alive": null,
-   "hash": "faee08fcac508057",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 1.0,
+   "hash": "8f6ff8566eaabf49",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -345,16 +345,16 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 8,
-   "secure": 8,
+   "nodes": 11,
+   "secure": 11,
    "protocols": {
-    "vless": 7,
+    "vless": 10,
     "vmess": 1
    },
-   "alive": null,
-   "hash": "03fadc2faef5465e",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 1.0,
+   "hash": "25263c69fb6e1226",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -372,15 +372,15 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 623,
-   "secure": 574,
+   "nodes": 661,
+   "secure": 611,
    "protocols": {
-    "vless": 623
+    "vless": 661
    },
-   "alive": null,
-   "hash": "427741468984d942",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.9,
+   "hash": "1a5d824d63066f5a",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -397,13 +397,13 @@
    ],
    "origin": "curated",
    "status": "dead",
-   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "error": "HTTP Error 403: Forbidden",
    "nodes": 0,
    "secure": 0,
    "protocols": {},
    "alive": null,
    "hash": null,
-   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
    "changedAt": null,
    "failingSince": "2026-10-20T18:24:48+00:00",
    "recommended": true
@@ -421,13 +421,13 @@
    ],
    "origin": "curated",
    "status": "dead",
-   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "error": "HTTP Error 403: Forbidden",
    "nodes": 0,
    "secure": 0,
    "protocols": {},
    "alive": null,
    "hash": null,
-   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
    "changedAt": null,
    "failingSince": "2026-10-20T18:24:48+00:00",
    "recommended": true
@@ -445,13 +445,13 @@
    ],
    "origin": "curated",
    "status": "dead",
-   "error": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+   "error": "HTTP Error 403: Forbidden",
    "nodes": 0,
    "secure": 0,
    "protocols": {},
    "alive": null,
    "hash": null,
-   "checkedAt": "2026-10-20T18:24:48+00:00",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
    "changedAt": null,
    "failingSince": "2026-10-20T18:24:48+00:00",
    "recommended": true
@@ -471,17 +471,17 @@
    "status": "ok",
    "error": null,
    "nodes": 200,
-   "secure": 198,
+   "secure": 197,
    "protocols": {
-    "vless": 193,
-    "hysteria2": 7
+    "vless": 197,
+    "hysteria2": 3
    },
-   "alive": null,
-   "hash": "0869028623c66193",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.65,
+   "hash": "bb090a8f29ff464b",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
-   "recommended": true
+   "recommended": false
   },
   {
    "id": "found-3768980559",
@@ -503,12 +503,12 @@
     "vless": 547,
     "trojan": 3
    },
-   "alive": null,
-   "hash": "d507f2a42bc2d528",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.55,
+   "hash": "24ad782005710280",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
-   "recommended": true
+   "recommended": false
   },
   {
    "id": "found-437bdb22fd",
@@ -524,17 +524,17 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 105,
-   "secure": 105,
+   "nodes": 117,
+   "secure": 117,
    "protocols": {
-    "vless": 105
+    "vless": 117
    },
-   "alive": null,
-   "hash": "c5fc2732edc8917b",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.86,
+   "hash": "c872fe65448410a7",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
-   "recommended": true
+   "recommended": false
   },
   {
    "id": "found-96e221582d",
@@ -550,15 +550,15 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 55,
-   "secure": 55,
+   "nodes": 87,
+   "secure": 81,
    "protocols": {
-    "vless": 55
+    "vless": 87
    },
-   "alive": null,
-   "hash": "1ff31a5d7ad0dfea",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.92,
+   "hash": "4a8d2ef4ffab0632",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -576,16 +576,17 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 72,
-   "secure": 72,
+   "nodes": 82,
+   "secure": 82,
    "protocols": {
-    "vless": 71,
-    "ss": 1
+    "vless": 73,
+    "ss": 8,
+    "trojan": 1
    },
-   "alive": null,
-   "hash": "c922ac7974fa8d50",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.88,
+   "hash": "b17fabf02977c21c",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -603,18 +604,18 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 205,
-   "secure": 200,
+   "nodes": 239,
+   "secure": 233,
    "protocols": {
-    "vless": 175,
-    "ss": 10,
-    "trojan": 7,
-    "vmess": 13
+    "vless": 206,
+    "ss": 9,
+    "vmess": 15,
+    "trojan": 9
    },
-   "alive": null,
-   "hash": "47dba175c3265224",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.97,
+   "hash": "dbba65937d608bea",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -632,20 +633,20 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 76,
-   "secure": 73,
+   "nodes": 136,
+   "secure": 131,
    "protocols": {
-    "vless": 64,
-    "ss": 6,
-    "trojan": 4,
-    "vmess": 2
+    "vless": 115,
+    "ss": 7,
+    "vmess": 7,
+    "trojan": 7
    },
-   "alive": null,
-   "hash": "ac47674734c2bb5c",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.97,
+   "hash": "ca3328c44fad8d0d",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
-   "recommended": true
+   "recommended": false
   },
   {
    "id": "found-b9f863a496",
@@ -662,17 +663,17 @@
    "status": "ok",
    "error": null,
    "nodes": 50,
-   "secure": 49,
+   "secure": 47,
    "protocols": {
-    "vless": 38,
-    "ss": 6,
-    "trojan": 4,
-    "vmess": 2
+    "vless": 37,
+    "ss": 7,
+    "vmess": 3,
+    "trojan": 3
    },
-   "alive": null,
-   "hash": "96d0527b58deb0da",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.95,
+   "hash": "7105b4b4b14284c8",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -690,15 +691,15 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 178,
-   "secure": 173,
+   "nodes": 206,
+   "secure": 200,
    "protocols": {
-    "vless": 178
+    "vless": 206
    },
-   "alive": null,
-   "hash": "c5a37aa74007f995",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 0.97,
+   "hash": "7de7dd3ea61d550b",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -716,17 +717,17 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 55,
-   "secure": 55,
+   "nodes": 58,
+   "secure": 58,
    "protocols": {
-    "vless": 55
+    "vless": 58
    },
-   "alive": null,
-   "hash": "c65dc56e62d24d79",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 1.0,
+   "hash": "84869a47526e8df0",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
-   "recommended": false
+   "recommended": true
   },
   {
    "id": "found-b61bc14421",
@@ -740,21 +741,178 @@
     "https://raw.githubusercontent.com/flaafix/AetrisVPN-white-list-lite/main/AetrisVPN.txt"
    ],
    "origin": "found",
+   "status": "dead",
+   "error": "вместо подписки веб-страница",
+   "nodes": 0,
+   "secure": 0,
+   "protocols": {},
+   "alive": null,
+   "hash": null,
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-20T18:24:48+00:00",
+   "failingSince": "2026-10-21T04:57:22+00:00",
+   "recommended": false
+  },
+  {
+   "id": "found-8ee779c469",
+   "title": "VansFenix · stable.txt",
+   "author": "VansFenix",
+   "homepage": "https://github.com/VansFenix/vpnparser",
+   "license": "не указана",
+   "description": "Найден автоматически: stable.txt. Пометка автора: 🏳️ Белый айпи.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/VansFenix/vpnparser/main/stable.txt"
+   ],
+   "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 62,
-   "secure": 57,
+   "nodes": 150,
+   "secure": 144,
    "protocols": {
-    "ss": 19,
-    "vless": 39,
-    "vmess": 4
+    "ss": 9,
+    "vless": 120,
+    "vmess": 12,
+    "trojan": 9
    },
-   "alive": null,
-   "hash": "492c1d7106472111",
-   "checkedAt": "2026-10-20T18:24:48+00:00",
-   "changedAt": "2026-10-20T18:24:48+00:00",
+   "alive": 1.0,
+   "hash": "564d444a2fba4644",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "found-763dfd88b4",
+   "title": "VansFenix · white.txt",
+   "author": "VansFenix",
+   "homepage": "https://github.com/VansFenix/vpnparser",
+   "license": "не указана",
+   "description": "Найден автоматически: white.txt.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/VansFenix/vpnparser/main/white.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 21,
+   "secure": 21,
+   "protocols": {
+    "vless": 20,
+    "vmess": 1
+   },
+   "alive": 0.95,
+   "hash": "b87497754fcd7406",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
    "failingSince": null,
    "recommended": false
+  },
+  {
+   "id": "found-a40cc4eaac",
+   "title": "Maskkost93 · kizyakbeta6.txt",
+   "author": "Maskkost93",
+   "homepage": "https://github.com/Maskkost93/kizyak-vpn-4.0",
+   "license": "не указана",
+   "description": "Найден автоматически: kizyakbeta6.txt. Пометка автора: LTE.",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta6.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 36,
+   "secure": 36,
+   "protocols": {
+    "vless": 36
+   },
+   "alive": 0.88,
+   "hash": "c61e405bdcef4f94",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
+   "failingSince": null,
+   "recommended": false
+  },
+  {
+   "id": "found-8d67cc54be",
+   "title": "gitverse.ru · whitelist",
+   "author": "api",
+   "homepage": "https://gitverse.ru/api/repos/272/wl/raw/branch/master/whitelist",
+   "license": "не указана",
+   "description": "Найден автоматически: whitelist.",
+   "mode": "white",
+   "mirrors": [
+    "https://gitverse.ru/api/repos/272/wl/raw/branch/master/whitelist"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 21,
+   "secure": 20,
+   "protocols": {
+    "vless": 19,
+    "trojan": 2
+   },
+   "alive": 0.95,
+   "hash": "91786eaf57940950",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
+   "failingSince": null,
+   "recommended": false
+  },
+  {
+   "id": "found-817f2b2343",
+   "title": "gitverse.ru · %F0%9F%86%93ProxyNova%20%E2%9D%AF%",
+   "author": "api",
+   "homepage": "https://gitverse.ru/api/repos/SlavaKat/FreeProxyNova/raw/branch/master/%F0%9F%86%93ProxyNova%20%E2%9D%AF%20%F0%9F%97%BD%F0%9F%95%8A%E2%9C%8A%20%D0%A0%D1%83%D1%87%D0%BD%D0%BE%D0%B9%20%D0%B2%D1%8B%D0%B1%D0%BE%D1%80%20%D0%9E%D0%B1%D1%85%D0%BE%D0%B4%20%D0%91%D0%A1%20(%D0%A2%D0%B5%D1%81%D1%82)",
+   "license": "не указана",
+   "description": "Найден автоматически: %F0%9F%86%93ProxyNova%20%E2%9D%AF%20%F0%9F%97%BD%F0%9F%95%8A%E2%9C%8A%20%D0%A0%D1%83%D1%87%D0%BD%D0%BE%D0%B9%20%D0%B2%D1%8B%D0%B1%D0%BE%D1%80%20%D0%9E%D0%B1%D1%85%D0%BE%D0%B4%20%D0%91%D0%A1%20(%D0%A2%D0%B5%D1%81%D1%82). Пометка автора: Обход БС.",
+   "mode": "white",
+   "mirrors": [
+    "https://gitverse.ru/api/repos/SlavaKat/FreeProxyNova/raw/branch/master/%F0%9F%86%93ProxyNova%20%E2%9D%AF%20%F0%9F%97%BD%F0%9F%95%8A%E2%9C%8A%20%D0%A0%D1%83%D1%87%D0%BD%D0%BE%D0%B9%20%D0%B2%D1%8B%D0%B1%D0%BE%D1%80%20%D0%9E%D0%B1%D1%85%D0%BE%D0%B4%20%D0%91%D0%A1%20(%D0%A2%D0%B5%D1%81%D1%82)"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 22,
+   "secure": 22,
+   "protocols": {
+    "vless": 22
+   },
+   "alive": 1.0,
+   "hash": "fdbc02dc0745c576",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "found-7e473f3e00",
+   "title": "gitverse.ru · WlSubPiz.txt",
+   "author": "api",
+   "homepage": "https://gitverse.ru/api/repos/Pizduk/PizdukVPN/raw/branch/master/WlSubPiz.txt",
+   "license": "не указана",
+   "description": "Найден автоматически: WlSubPiz.txt.",
+   "mode": "white",
+   "mirrors": [
+    "https://gitverse.ru/api/repos/Pizduk/PizdukVPN/raw/branch/master/WlSubPiz.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 28,
+   "secure": 28,
+   "protocols": {
+    "vless": 28
+   },
+   "alive": 1.0,
+   "hash": "875c2e29ffa70236",
+   "checkedAt": "2026-10-21T04:57:22+00:00",
+   "changedAt": "2026-10-21T04:57:22+00:00",
+   "failingSince": null,
+   "recommended": true
   }
  ]
 }
