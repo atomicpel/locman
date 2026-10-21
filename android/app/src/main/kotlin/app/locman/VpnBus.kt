@@ -8,6 +8,26 @@ import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 
+/** Запасной узел для сторожа: полный конфиг и урезанный для проверки. */
+data class Backup(val config: String, val test: String, val name: String, val nodeId: String) {
+    fun toJson(): JSONObject = JSONObject().put("config", config).put("test", test).put("name", name).put("nodeId", nodeId)
+
+    companion object {
+        fun list(a: JSONArray?): List<Backup> = (0 until (a?.length() ?: 0)).mapNotNull { i ->
+            runCatching {
+                val o = a!!.getJSONObject(i)
+                Backup(o.getString("config"), o.getString("test"), o.optString("name"), o.optString("nodeId"))
+            }.getOrNull()
+        }
+
+        fun fromMaps(list: List<Map<String, Any?>>?): List<Backup> = list.orEmpty().mapNotNull { m ->
+            val config = m["config"] as? String ?: return@mapNotNull null
+            val test = m["test"] as? String ?: return@mapNotNull null
+            Backup(config, test, m["name"] as? String ?: "", m["nodeId"] as? String ?: "")
+        }
+    }
+}
+
 /** Что нужно службе, чтобы поднять туннель. Сохраняется на диск — для плитки, загрузки и «постоянного VPN». */
 data class StartSpec(
     val config: String,
@@ -21,11 +41,14 @@ data class StartSpec(
     val mtu: Int,
     /** "xray" — TUN читает само ядро Xray; "hev" — через hev-socks5-tunnel и SOCKS5. */
     val tunMode: String = "xray",
+    /** Запасные узлы на случай, если текущий перестанет отвечать (сторож переключится сам). */
+    val backups: List<Backup> = emptyList(),
 ) {
     fun toJson(): String = JSONObject()
         .put("config", config).put("name", name).put("nodeId", nodeId)
         .put("socksPort", socksPort).put("httpPort", httpPort).put("user", user).put("pass", pass)
         .put("bypass", JSONArray(bypass)).put("mtu", mtu).put("tunMode", tunMode)
+        .put("backups", JSONArray(backups.map { it.toJson() }))
         .toString()
 
     companion object {
@@ -52,6 +75,7 @@ data class StartSpec(
                 bypass = (0 until bypass.length()).map { bypass.getString(it) },
                 mtu = j.optInt("mtu", 1500),
                 tunMode = j.optString("tunMode", "xray"),
+                backups = Backup.list(j.optJSONArray("backups")),
             )
         }.getOrNull()
 
@@ -89,6 +113,11 @@ object VpnBus {
     fun set(s: VpnState) {
         state = s
         emit(s.toMap())
+    }
+
+    /** Сторож: "failover" (переключился сам), "stalled" (запасные не помогли), "alive". */
+    fun watch(kind: String, name: String? = null, nodeId: String? = null) {
+        emit(mapOf("type" to "watch", "kind" to kind, "name" to name, "nodeId" to nodeId))
     }
 
     fun traffic(up: Long, down: Long, upTotal: Long, downTotal: Long) {

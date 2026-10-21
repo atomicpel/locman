@@ -129,6 +129,7 @@ class MainActivity : FlutterActivity() {
                     bypass = call.argument<List<String>>("bypass") ?: emptyList(),
                     mtu = call.argument<Int>("mtu") ?: 1500,
                     tunMode = call.argument<String>("tunMode") ?: "xray",
+                    backups = Backup.fromMaps(call.argument<List<Map<String, Any?>>>("backups")),
                 )
                 try {
                     LocmanVpnService.start(this, spec)
@@ -136,6 +137,12 @@ class MainActivity : FlutterActivity() {
                 } catch (e: Exception) {
                     result.error("start", e.message, null)
                 }
+            }
+
+            "setBackups" -> {
+                val backups = Backup.fromMaps(call.argument<List<Map<String, Any?>>>("backups"))
+                StartSpec.load(this)?.let { StartSpec.save(this, it.copy(backups = backups)) }
+                result.success(null)
             }
 
             "stop" -> {

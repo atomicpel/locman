@@ -20,6 +20,8 @@ class LocmanVpnService : VpnService() {
         const val ACTION_STOP = "app.locman.action.STOP"
         private const val CHANNEL = "vpn"
         private const val NOTIFICATION_ID = 7
+        private const val PROBE_URL = "https://www.gstatic.com/generate_204"
+        private const val PROBE_URL_2 = "https://cp.cloudflare.com/generate_204"
 
         fun start(ctx: Context, spec: StartSpec) {
             StartSpec.save(ctx, spec)
@@ -40,6 +42,11 @@ class LocmanVpnService : VpnService() {
     }
 
     private val worker = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "locman-vpn") }
+
+    /** Сторож туннеля: свой поток, чтобы долгие проверки не мешали службе. */
+    private val watcher = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "locman-watch") }
+    private var watchdog: ScheduledFuture<*>? = null
+    @Volatile private var watchGen = 0
     private var tun: ParcelFileDescriptor? = null
     private var monitor: ScheduledFuture<*>? = null
     private var lastText: String? = null
@@ -112,6 +119,68 @@ class LocmanVpnService : VpnService() {
         StartSpec.setWasOn(this, true)
         update(spec.name, "Подключено")
         startMonitor(spec.name, xrayTun)
+        startWatchdog(spec.nodeId)
+    }
+
+    /**
+     * Каждые 20 секунд (при выключенном экране — раз в минуту) делаем запрос через сам туннель.
+     * Два провала подряд — проверяем запасные узлы и переключаемся на первый живой.
+     * Работает без открытого приложения.
+     */
+    private fun startWatchdog(nodeId: String) {
+        watchdog?.cancel(false)
+        val gen = ++watchGen
+        var fails = 0
+        var tick = 0
+        var stalledSince = 0L
+        val power = getSystemService(android.os.PowerManager::class.java)
+        watchdog = watcher.scheduleWithFixedDelay({
+            if (gen != watchGen) return@scheduleWithFixedDelay
+            tick++
+            val screenOn = runCatching { power.isInteractive }.getOrDefault(true)
+            if (!screenOn && tick % 3 != 0) return@scheduleWithFixedDelay
+            val ok = XrayEngine.measureCurrent(PROBE_URL) > 0 || XrayEngine.measureCurrent(PROBE_URL_2) > 0
+            if (gen != watchGen) return@scheduleWithFixedDelay
+            if (ok) {
+                if (fails > 0 || stalledSince > 0) VpnBus.watch("alive", nodeId = nodeId)
+                fails = 0
+                stalledSince = 0
+                return@scheduleWithFixedDelay
+            }
+            fails++
+            if (fails < 2) return@scheduleWithFixedDelay
+            // Запасные не дёргаем чаще раза в 2 минуты, если они уже не помогли.
+            val now = System.currentTimeMillis()
+            if (stalledSince > 0 && now - stalledSince < 120_000) return@scheduleWithFixedDelay
+            if (!failover(gen)) {
+                stalledSince = now
+                update("Узел не отвечает", "Ищу рабочий — откройте «Лоцман», если не найдётся")
+                VpnBus.watch("stalled", nodeId = nodeId)
+            }
+        }, 20, 20, TimeUnit.SECONDS)
+    }
+
+    /** Проверяем запасные параллельно, переключаемся на самый быстрый из ответивших. */
+    private fun failover(gen: Int): Boolean {
+        val spec = StartSpec.load(this) ?: return false
+        val candidates = spec.backups.filter { it.nodeId != spec.nodeId }.take(10)
+        if (candidates.isEmpty()) return false
+        update(spec.name, "Узел не отвечает — проверяю запасные")
+        val pool = Executors.newFixedThreadPool(5)
+        val results = try {
+            candidates.map { b -> b to pool.submit<Long> { XrayEngine.measureDelay(b.test, PROBE_URL) } }
+                .map { (b, f) -> b to runCatching { f.get(15, TimeUnit.SECONDS) }.getOrDefault(-1L) }
+        } finally {
+            pool.shutdownNow()
+        }
+        if (gen != watchGen) return true
+        val best = results.filter { it.second > 0 }.minByOrNull { it.second }?.first ?: return false
+        val rest = spec.backups.filter { it.nodeId != best.nodeId }
+        val next = spec.copy(config = best.config, name = best.name, nodeId = best.nodeId, backups = rest)
+        StartSpec.save(this, next)
+        VpnBus.watch("failover", name = best.name, nodeId = best.nodeId)
+        worker.execute { connect(next) }
+        return true
     }
 
     private fun startMonitor(name: String, xrayTun: Boolean) {
@@ -144,6 +213,9 @@ class LocmanVpnService : VpnService() {
     }
 
     private fun teardown(closeTun: Boolean = true) {
+        watchGen++
+        watchdog?.cancel(false)
+        watchdog = null
         monitor?.cancel(false)
         monitor = null
         TunBridge.stop()
@@ -177,6 +249,7 @@ class LocmanVpnService : VpnService() {
     override fun onDestroy() {
         runCatching { worker.submit { teardown() }.get(3, TimeUnit.SECONDS) }
         worker.shutdown()
+        watcher.shutdownNow()
         if (VpnBus.state !is VpnState.Failed) VpnBus.set(VpnState.Idle)
         super.onDestroy()
     }

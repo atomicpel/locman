@@ -62,6 +62,16 @@ object XrayEngine {
         lastError = null
     }.onFailure { lastError = (it.cause ?: it).message }
 
+    /** Задержка запроса через работающий туннель (то же ядро), мс; -1 — не прошёл. */
+    fun measureCurrent(url: String): Long {
+        val c = controller ?: return -1
+        val m = c.javaClass.methods.firstOrNull { it.name == "measureDelay" && it.parameterCount == 1 } ?: return -1
+        val task = measurers.submit<Long> { (m.invoke(c, url) as Number).toLong() }
+        return runCatching { task.get(14_000, TimeUnit.MILLISECONDS) }
+            .onFailure { task.cancel(true) }
+            .getOrDefault(-1L)
+    }
+
     private val probes = java.util.concurrent.ConcurrentHashMap<Int, Any>()
     private val probeIds = java.util.concurrent.atomic.AtomicInteger(1)
 

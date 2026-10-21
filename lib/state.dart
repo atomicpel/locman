@@ -213,8 +213,6 @@ class AppState extends ChangeNotifier {
   Timer? _toastTimer;
   Timer? _ticker;
   Timer? _periodic;
-  int _probeFails = 0;
-  bool _probing = false;
   StreamSubscription<Object>? _events;
   final Random _random = Random();
 
@@ -1063,6 +1061,7 @@ class AppState extends ChangeNotifier {
     unawaited(_saveHealth());
     if (stale()) return;
     _huntSeen.addAll(cands.map((n) => n.id));
+    _pushBackups();
 
     // Скорость: текущий через туннель, лучшие 4 по задержке — каждый через отдельный экземпляр ядра.
     huntStatus = 'Меряем скорость лучших узлов';
@@ -1309,6 +1308,32 @@ class AppState extends ChangeNotifier {
     return cancelled() ? null : first;
   }
 
+  /// Запасные узлы для сторожа в службе: свежие живые, кроме текущего, лучшие по задержке.
+  /// Конфиги собираются с теми же локальными входами, что у поднятого туннеля.
+  List<Map<String, String>> _backups(ProxyNode current, LocalProxy local) {
+    final list = _candidates(_kindForMode())
+        .where((n) => n.id != current.id && latencyOf(n.id) > 0)
+        .toList()
+      ..sort((a, b) => latencyOf(a.id).compareTo(latencyOf(b.id)));
+    return [
+      for (final n in list.take(10))
+        {
+          'config': XrayConfig.build(n,
+              local: local, directRu: directRu, dns: dns, fragment: _fragFor(n), xrayTun: tunEngine == 'xray'),
+          'test': _testConfig(n, frag: _fragFor(n)),
+          'name': n.title,
+          'nodeId': n.id,
+        },
+    ];
+  }
+
+  void _pushBackups() {
+    final n = nodeById(activeId);
+    final local = Net.tunnel;
+    if (phase != Phase.on || n == null || local == null) return;
+    unawaited(Native.setBackups(_backups(n, local)).catchError((_) {}));
+  }
+
   /// Поднимаем туннель через узел и проверяем, что трафик идёт.
   Future<bool> _bring(ProxyNode n, bool Function() cancelled) async {
     final local = LocalProxy(
@@ -1353,6 +1378,7 @@ class AppState extends ChangeNotifier {
         pass: local.pass,
         bypass: bypass,
         tunMode: tunEngine,
+        backups: _backups(n, local),
       );
     } catch (e) {
       log('Служба VPN не запустилась: ${_short(e)}');
@@ -1385,7 +1411,6 @@ class AppState extends ChangeNotifier {
     sessionDown = 0;
     sessionUp = 0;
     history.clear();
-    _probeFails = 0;
     _save();
     unawaited(refreshIp());
     _huntSeen
@@ -1428,6 +1453,29 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     } else if (e is VpnStatus) {
       _applyStatus(e);
+    } else if (e is WatchEvent) {
+      _onWatch(e);
+    }
+  }
+
+  /// Сторож в службе сам переключил узел или не нашёл живых запасных.
+  void _onWatch(WatchEvent e) {
+    switch (e.kind) {
+      case 'failover':
+        final old = activeId;
+        if (old != null && old != e.nodeId) _record(old, -1, real: true);
+        log('Узел перестал отвечать — сторож переключил на ${e.name ?? 'запасной'}');
+        flash('Узел отвалился — переключились на ${e.name ?? 'запасной'}');
+        stopHunt();
+      case 'stalled':
+        log('Узел не отвечает, запасные тоже — ищем заново');
+        if (phase == Phase.on) {
+          final n = nodeById(activeId);
+          if (n != null) _record(n.id, -1, real: true);
+          unawaited(connect(ignorePin: true));
+        }
+      case 'alive':
+        break;
     }
   }
 
@@ -1444,6 +1492,10 @@ class AppState extends ChangeNotifier {
       // Служба — источник правды о том, какой узел реально поднят.
       log('Сверка с туннелем: активен ${s.name ?? s.nodeId}');
       activeId = s.nodeId;
+      connectedAt = s.since ?? connectedAt;
+      ipInfo = null;
+      unawaited(refreshIp());
+      _pushBackups();
       notifyListeners();
     }
     if (s.phase == 'connected' && s.local != null && Net.tunnel == null) {
@@ -1462,22 +1514,7 @@ class AppState extends ChangeNotifier {
     now = DateTime.now().millisecondsSinceEpoch;
     if (phase == Phase.on) {
       notifyListeners();
-      // Раз в 30 секунд проверяем, что узел жив; два провала подряд — ищем новый.
-      if (Net.tunnel != null && now ~/ 1000 % 30 == 0 && !_probing) {
-        _probing = true;
-        Net.probeTunnel().then((ok) {
-          _probing = false;
-          if (phase != Phase.on) return;
-          _probeFails = ok ? 0 : _probeFails + 1;
-          if (_probeFails >= 2) {
-            final n = nodeById(activeId);
-            if (n != null) _record(n.id, -1, real: true);
-            log('Узел перестал отвечать, ищем другой');
-            flash('Узел не отвечает — ищем другой');
-            unawaited(connect(ignorePin: true));
-          }
-        });
-      }
+      // За живостью туннеля следит сторож в службе VPN (работает и без открытого приложения).
     }
   }
 

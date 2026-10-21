@@ -35,6 +35,14 @@ class VpnStatus {
       );
 }
 
+/// Сообщение сторожа туннеля из службы: failover, stalled, alive.
+class WatchEvent {
+  const WatchEvent(this.kind, this.name, this.nodeId);
+  final String kind;
+  final String? name;
+  final String? nodeId;
+}
+
 class Traffic {
   const Traffic(this.up, this.down, this.upTotal, this.downTotal);
   final int up;
@@ -75,6 +83,9 @@ class Native {
   /// События службы: [VpnStatus] и [Traffic].
   static Stream<Object> events() => _stream ??= _events.receiveBroadcastStream().map((e) {
         final m = e as Map;
+        if (m['type'] == 'watch') {
+          return WatchEvent(m['kind'] as String, m['name'] as String?, m['nodeId'] as String?);
+        }
         if (m['type'] == 'traffic') {
           return Traffic(
             (m['up'] as num).toInt(),
@@ -116,6 +127,7 @@ class Native {
     required String pass,
     required List<String> bypass,
     String tunMode = 'xray',
+    List<Map<String, String>> backups = const [],
     int mtu = 1500,
   }) =>
       _core.invokeMethod('start', {
@@ -129,9 +141,14 @@ class Native {
         'bypass': bypass,
         'mtu': mtu,
         'tunMode': tunMode,
+        'backups': backups,
       });
 
   static Future<void> stop() => _core.invokeMethod('stop');
+
+  /// Обновить запасные узлы сторожа в уже поднятом туннеле.
+  static Future<void> setBackups(List<Map<String, String>> backups) =>
+      _core.invokeMethod('setBackups', {'backups': backups});
 
   static Future<VpnStatus> state() async =>
       VpnStatus.fromMap((await _core.invokeMethod<Map>('state')) ?? const {'phase': 'idle'});
