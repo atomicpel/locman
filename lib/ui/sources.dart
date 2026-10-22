@@ -52,6 +52,20 @@ class SourcesScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
+        PillButton(
+          label: s.refreshing.isNotEmpty ? 'Обновляем подписки…' : 'Обновить все подписки',
+          icon: Icons.refresh_rounded,
+          onTap: s.refreshing.isNotEmpty ? null : s.refreshAll,
+        ),
+        if (s.mine.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          PillButton(
+            label: 'Поделиться своими — ссылка или QR',
+            icon: Icons.qr_code_2_rounded,
+            onTap: () => showShareSheet(context, s),
+          ),
+        ],
+        const SizedBox(height: 12),
         if (s.mine.isEmpty)
           Panel(
             dashed: true,

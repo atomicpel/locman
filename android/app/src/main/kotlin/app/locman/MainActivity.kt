@@ -71,6 +71,11 @@ class MainActivity : FlutterActivity() {
         val data = intent?.data ?: return
         if (intent.action != Intent.ACTION_VIEW || data.scheme != "locman" || data.host != "import") return
         val raw = data.toString()
+        // Набор подписок целиком (сжатый): locman://import?data=…
+        runCatching { data.getQueryParameter("data") }.getOrNull()?.let { packed ->
+            if (packed.length <= 65536) VpnBus.link("data:$packed")
+            return
+        }
         if (raw.length > 4200) return
         val value = runCatching { data.getQueryParameter("url") }.getOrNull()
             ?: raw.substringAfter("://import", "").trimStart('/').takeIf { it.isNotEmpty() }
@@ -216,6 +221,19 @@ class MainActivity : FlutterActivity() {
                 val bm = getSystemService(android.os.BatteryManager::class.java)
                 val level = runCatching { bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) }.getOrDefault(-1)
                 result.success(mapOf("level" to level, "charging" to bm.isCharging))
+            }
+
+            "qr" -> {
+                val text = call.argument<String>("text")!!
+                val size = call.argument<Int>("size") ?: 720
+                async(result) { Qr.png(text, size) }
+            }
+
+            "share" -> {
+                val text = call.argument<String>("text")!!
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+                open(Intent.createChooser(send, call.argument<String>("title") ?: "Поделиться"))
+                result.success(null)
             }
 
             "apps" -> async(result) { Apps.list(this) }

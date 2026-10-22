@@ -296,19 +296,22 @@ class _ImportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = PaletteScope.of(context);
     final link = s.pendingImport!;
-    final isSub = link.toLowerCase().startsWith('http');
+    final lines = link.split('\n');
+    final subs = lines.where((l) => l.toLowerCase().startsWith('http')).length;
+    final keys = lines.length - subs;
+    final title = lines.length == 1
+        ? (subs == 1 ? 'Добавить подписку?' : 'Добавить ключ?')
+        : 'Добавить ${[if (subs > 0) 'подписок: $subs', if (keys > 0) 'ключей: $keys'].join(', ')}?';
+    final preview = lines.take(3).map((l) => l.length > 80 ? '${l.substring(0, 79)}…' : l).join('\n');
     return _Veil(
       onClose: s.dismissImport,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(isSub ? 'Добавить подписку?' : 'Добавить ключ?', style: p.text(18, weight: FontWeight.w600, display: true)),
+          Text(title, style: p.text(18, weight: FontWeight.w600, display: true)),
           const SizedBox(height: 8),
-          Text(
-            link.length > 160 ? '${link.substring(0, 159)}…' : link,
-            style: p.text(13, color: p.muted),
-          ),
+          Text(lines.length > 3 ? '$preview\n… и ещё ${lines.length - 3}' : preview, style: p.text(13, color: p.muted)),
           const SizedBox(height: 8),
           Text('Добавляйте только ссылки от тех, кому доверяете.', style: p.text(13, color: p.muted)),
           const SizedBox(height: 16),

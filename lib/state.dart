@@ -875,8 +875,22 @@ class AppState extends ChangeNotifier {
     final keyLines = <String>[];
     var crypt = 0;
     final tokens = RegExp(r'[A-Za-z][A-Za-z0-9+.-]*://[^\s"<>]+').allMatches(input).map((m) => m.group(0)!);
+    final expanded = <String>[];
     for (var t in tokens) {
       t = t.replaceAll(RegExp(r'[),.;]+$'), '');
+      final lower = t.toLowerCase();
+      if (lower.startsWith('locman://import')) {
+        // Ссылка «Поделиться» из другого «Лоцмана»: внутри сжатый набор или одна ссылка.
+        final uri = Uri.tryParse(t);
+        final data = uri?.queryParameters['data'];
+        final one = uri?.queryParameters['url'];
+        if (data != null) expanded.addAll(unpackShare(data) ?? const []);
+        if (one != null) expanded.add(one);
+        continue;
+      }
+      expanded.add(t);
+    }
+    for (var t in expanded) {
       final lower = t.toLowerCase();
       if (lower.startsWith('happ://add/')) {
         t = pctDecode(t.substring(11));
@@ -886,7 +900,7 @@ class AppState extends ChangeNotifier {
       }
       if (RegExp(r'^https?://', caseSensitive: false).hasMatch(t)) {
         if (!urls.contains(t)) urls.add(t);
-      } else {
+      } else if (!keyLines.contains(t)) {
         keyLines.add(t);
       }
     }
@@ -988,6 +1002,46 @@ class AppState extends ChangeNotifier {
     flash('Добавлено — ${parts.join(', ')}');
     unawaited(_refreshMany(subs));
     return null;
+  }
+
+  // ---------- Поделиться своими подписками ----------
+
+  /// Все свои источники: ссылки подписок и ключи, по одной строке.
+  List<String> shareLines() {
+    final out = <String>[];
+    for (final m in mine) {
+      if (m.links != null) {
+        for (final l in m.links!.split('\n')) {
+          final t = l.trim();
+          if (t.isNotEmpty && !out.contains(t)) out.add(t);
+        }
+      } else if (m.mirrors.isNotEmpty && !out.contains(m.mirrors.first)) {
+        out.add(m.mirrors.first);
+      }
+    }
+    return out;
+  }
+
+  /// Ссылка locman://import?data=… — весь набор, сжатый gzip и в base64url.
+  static String packShare(List<String> lines) {
+    final packed = base64Url.encode(gzip.encode(utf8.encode(lines.join('\n')))).replaceAll('=', '');
+    return 'locman://import?data=$packed';
+  }
+
+  /// Обратно из data=…; null — не разобралось. Больше 1 МБ не распаковываем.
+  static List<String>? unpackShare(String data) {
+    try {
+      final padded = data.padRight((data.length + 3) ~/ 4 * 4, '=');
+      final raw = gzip.decode(base64Url.decode(padded));
+      if (raw.length > 1024 * 1024) return null;
+      return utf8
+          .decode(raw, allowMalformed: true)
+          .split(RegExp(r'\s+'))
+          .where((l) => l.isNotEmpty && l.length <= 4096 && checkImportLink(l) != null)
+          .toList();
+    } catch (_) {
+      return null;
+    }
   }
 
   void removeMine(Source s) {
@@ -1953,6 +2007,16 @@ class AppState extends ChangeNotifier {
   Future<void> _takeLink() async {
     final raw = await Native.takeLink();
     if (raw == null) return;
+    if (raw.startsWith('data:')) {
+      final lines = unpackShare(raw.substring(5));
+      if (lines == null || lines.isEmpty) {
+        flash('В ссылке нет подписок');
+        return;
+      }
+      pendingImport = lines.join('\n');
+      notifyListeners();
+      return;
+    }
     final link = checkImportLink(raw);
     if (link == null) {
       flash('Ссылка импорта не подошла');

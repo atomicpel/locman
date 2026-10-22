@@ -212,6 +212,19 @@ class Native {
 
   static Future<bool> batteryRestricted() async => (await _core.invokeMethod<bool>('batteryRestricted')) ?? false;
 
+  /// QR-код текста в PNG; null — не поместился.
+  static Future<Uint8List?> qr(String text, {int size = 720}) async {
+    try {
+      return await _core.invokeMethod<Uint8List>('qr', {'text': text, 'size': size});
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Системное «Поделиться» с текстом.
+  static Future<void> share(String text, {String title = 'Поделиться'}) =>
+      _core.invokeMethod('share', {'text': text, 'title': title});
+
   static Future<void> openBattery() => _core.invokeMethod('openBattery');
   static Future<void> openAutostart() => _core.invokeMethod('openAutostart');
   static Future<void> openVpnSettings() => _core.invokeMethod('openVpnSettings');

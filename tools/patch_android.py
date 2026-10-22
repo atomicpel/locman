@@ -110,6 +110,8 @@ dependencies {
     // Ядро Xray (AndroidLibXrayLite) — скачивается в CI скриптом tools/fetch_natives.sh
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
     implementation("androidx.core:core:1.13.1")
+    // QR-код для «Поделиться подписками»
+    implementation("com.google.zxing:core:3.5.3")
 }
 """
 

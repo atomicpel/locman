@@ -285,5 +285,16 @@ void main() {
     expect(Net.dnsAnswered(reply), isTrue);
     expect(Net.dnsAnswered([0, 0, 0x81, 0x83, 0, 1, 0, 0, 0, 0, 0, 0]), isFalse);
   });
+
+  test('поделиться: ссылка locman://import?data= туда и обратно', () {
+    final lines = ['https://a.example.com/sub/1', vless, 'https://b.example.com/s'];
+    final link = AppState.packShare(lines);
+    expect(link.startsWith('locman://import?data='), isTrue);
+    expect(AppState.unpackShare(Uri.parse(link).queryParameters['data']!), lines);
+    final (urls, keys, _) = AppState.splitImport('вот: $link');
+    expect(urls, ['https://a.example.com/sub/1', 'https://b.example.com/s']);
+    expect(keys, [vless]);
+    expect(AppState.unpackShare('мусор'), isNull);
+  });
 }
 

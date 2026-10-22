@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/node.dart';
+import '../engine/native.dart';
 import '../state.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -242,4 +245,80 @@ class _AddFormState extends State<_AddForm> {
       ],
     );
   }
+}
+
+/// Поделиться всеми своими подписками и ключами: ссылка, список и QR-код.
+Future<void> showShareSheet(BuildContext context, AppState s) {
+  final lines = s.shareLines();
+  final link = AppState.packShare(lines);
+  final subs = lines.where((l) => l.toLowerCase().startsWith('http')).length;
+  final keys = lines.length - subs;
+  final what = [if (subs > 0) 'подписок: $subs', if (keys > 0) 'ключей: $keys'].join(', ');
+  // В QR влезает около 2900 символов; больше — только ссылкой или списком.
+  final qr = link.length <= 2900 ? Native.qr(link) : Future<Uint8List?>.value(null);
+  return _sheet(context, (ctx, p) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Поделиться своими', style: p.text(18, weight: FontWeight.w600, display: true)),
+        const SizedBox(height: 2),
+        Text(what.isEmpty ? 'Своих подписок нет' : what[0].toUpperCase() + what.substring(1), style: p.text(14, color: p.muted)),
+        const SizedBox(height: 12),
+        Center(
+          child: FutureBuilder<Uint8List?>(
+            future: qr,
+            builder: (_, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return SizedBox(width: 220, height: 220, child: Center(child: CircularProgressIndicator(color: p.accent)));
+              }
+              final png = snap.data;
+              if (png == null) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'Подписок слишком много для QR-кода — поделитесь ссылкой или списком.',
+                    textAlign: TextAlign.center,
+                    style: p.text(14, color: p.muted),
+                  ),
+                );
+              }
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(png, width: 240, height: 240, filterQuality: FilterQuality.none),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Наведите камеру другого телефона с «Лоцманом» — откроется окно «Добавить». '
+          'Если камера показывает только текст, скопируйте его и вставьте в «Источники → Добавить».',
+          textAlign: TextAlign.center,
+          style: p.text(13, color: p.muted),
+        ),
+        const SizedBox(height: 4),
+        _sheetButton(p, Icons.share_rounded, 'Поделиться ссылкой', () {
+          Native.share(
+            'Подписки для «Лоцмана» ($what). Откройте ссылку на телефоне с «Лоцманом» '
+            'или вставьте её в «Источники → Добавить»:\n$link',
+            title: 'Поделиться подписками',
+          );
+        }),
+        _sheetButton(p, Icons.list_rounded, 'Поделиться списком', () {
+          Native.share(lines.join('\n'), title: 'Поделиться подписками');
+        }),
+        _sheetButton(p, Icons.copy_rounded, 'Копировать ссылку', () {
+          Clipboard.setData(ClipboardData(text: link));
+          Navigator.pop(ctx);
+          s.flash('Ссылка скопирована');
+        }),
+        const SizedBox(height: 8),
+        Text(
+          'Список подойдёт и для других приложений (Happ, v2rayNG). Кто получит ссылку, сможет пользоваться '
+          'вашими подписками — платные отправляйте только тем, кому доверяете.',
+          style: p.text(12, color: p.muted),
+        ),
+      ],
+    );
+  });
 }
