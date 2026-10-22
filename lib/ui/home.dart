@@ -47,7 +47,7 @@ class HomeScreen extends StatelessWidget {
             s.phase == Phase.fail
                 ? (s.failText ?? 'Узел не отвечает')
                 : s.phase == Phase.seek
-                    ? seekLabels[max(0, min(3, s.seekStep - 1))]
+                    ? seekLabels[max(0, min(seekLabels.length - 1, s.seekStep - 1))]
                     : phaseLabel(s.phase),
             textAlign: TextAlign.center,
             style: p.text(14, weight: FontWeight.w500, color: s.phase == Phase.fail ? p.danger : p.muted),
@@ -296,7 +296,7 @@ class _IslandPower extends StatelessWidget {
                     s.phase == Phase.fail
                         ? (s.failText ?? 'Узел не отвечает')
                         : s.phase == Phase.seek
-                            ? seekLabels[max(0, min(3, s.seekStep - 1))]
+                            ? seekLabels[max(0, min(seekLabels.length - 1, s.seekStep - 1))]
                             : phaseLabel(s.phase),
                     style: p.text(14, color: s.phase == Phase.fail ? p.danger : p.muted),
                   ),

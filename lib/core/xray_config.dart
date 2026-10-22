@@ -20,6 +20,54 @@ List<String> dnsOrder(String preferred) =>
 
 const fragmentTag = 'fragment';
 
+/// Как подключаться к узлу, если обычный способ не пропускает данные:
+/// другой отпечаток браузера, всё через одно соединение (mux), дробление первого пакета.
+/// [dns] — какой DNS-сервер отвечает через этот узел.
+class NodeProfile {
+  const NodeProfile({this.fp, this.mux = false, this.frag, this.dns});
+  final String? fp;
+  final bool mux;
+
+  /// null — как в настройках; true/false — принудительно.
+  final bool? frag;
+  final String? dns;
+
+  bool get isPlain => fp == null && !mux && frag == null;
+
+  NodeProfile withDns(String? d) => NodeProfile(fp: fp, mux: mux, frag: frag, dns: d);
+
+  String get label => [
+        if (fp != null) fp == 'firefox' ? 'Firefox' : (fp == 'edge' ? 'Edge' : fp!),
+        if (mux) 'одно соединение',
+        if (frag == true) 'дробление',
+        if (frag == false) 'без дробления',
+      ].join(', ');
+
+  Map<String, Object> toJson() => {
+        if (fp != null) 'fp': fp!,
+        if (mux) 'mux': true,
+        if (frag != null) 'frag': frag!,
+        if (dns != null) 'dns': dns!,
+      };
+
+  static NodeProfile? fromJson(Object? j) {
+    if (j is! Map) return null;
+    return NodeProfile(
+      fp: j['fp'] as String?,
+      mux: j['mux'] == true,
+      frag: j['frag'] as bool?,
+      dns: dnsServers.containsKey(j['dns']) ? j['dns'] as String : null,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is NodeProfile && other.fp == fp && other.mux == mux && other.frag == frag && other.dns == dns;
+
+  @override
+  int get hashCode => Object.hash(fp, mux, frag, dns);
+}
+
 class XrayConfig {
   static const _privateCidrs = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8', '169.254.0.0/16'];
 
@@ -34,10 +82,13 @@ class XrayConfig {
     bool fragment = false,
     bool xrayTun = false,
     int mtu = 1500,
+    NodeProfile? profile,
   }) {
     final provider = node.isJson ? jsonDecode(node.raw) as Map<String, dynamic> : null;
-    final frag = fragment && node.canFragment;
-    final proxies = provider != null ? List<dynamic>.from(provider['outbounds'] as List) : [_outbound(node)];
+    final frag = (profile?.frag ?? fragment) && node.canFragment;
+    final fp = node.usesFingerprint ? profile?.fp : null;
+    final mux = profile?.mux == true && node.canMux;
+    final proxies = provider != null ? List<dynamic>.from(provider['outbounds'] as List) : [_outbound(node, fp: fp, mux: mux)];
     if (frag) {
       // Фрагментация TLS ClientHello: ТСПУ хуже узнаёт рукопожатие. Как в Happ — по умолчанию.
       final proxy = proxies.first as Map<String, dynamic>;
@@ -103,7 +154,7 @@ class XrayConfig {
       };
       config['dns'] = {
         'servers': [
-          for (final s in dnsOrder(dns))
+          for (final s in dnsOrder(profile?.dns ?? dns))
             {
               'address': encryptedDns ? 'https://${dnsServers[s]}/dns-query' : dnsServers[s],
               'timeoutMs': 2500,
@@ -159,7 +210,16 @@ class XrayConfig {
 
   static String? _nb(String? s) => (s == null || s.trim().isEmpty) ? null : s;
 
-  static Map<String, dynamic> _outbound(ProxyNode n) {
+  static Map<String, dynamic> _outbound(ProxyNode n, {String? fp, bool mux = false}) {
+    final o = _baseOutbound(n, fp);
+    if (!mux) return o;
+    return {
+      ...o,
+      'mux': {'enabled': true, 'concurrency': 8, 'xudpConcurrency': 8, 'xudpProxyUDP443': 'reject'},
+    };
+  }
+
+  static Map<String, dynamic> _baseOutbound(ProxyNode n, String? fp) {
     final p = n.params;
     switch (n.protocol) {
       case Protocol.vless:
@@ -181,7 +241,7 @@ class XrayConfig {
               },
             ],
           },
-          'streamSettings': _stream(n),
+          'streamSettings': _stream(n, fp),
         };
       case Protocol.vmess:
         return {
@@ -202,7 +262,7 @@ class XrayConfig {
               },
             ],
           },
-          'streamSettings': _stream(n),
+          'streamSettings': _stream(n, fp),
         };
       case Protocol.trojan:
         return {
@@ -213,7 +273,7 @@ class XrayConfig {
               {'address': n.address, 'port': n.port, 'password': n.secret},
             ],
           },
-          'streamSettings': _stream(n),
+          'streamSettings': _stream(n, fp),
         };
       case Protocol.shadowsocks:
         return {
@@ -231,12 +291,12 @@ class XrayConfig {
           'tag': 'proxy',
           'protocol': 'hysteria',
           'settings': {'version': 2, 'address': n.address, 'port': n.port},
-          'streamSettings': _stream(n),
+          'streamSettings': _stream(n, fp),
         };
     }
   }
 
-  static Map<String, dynamic> _stream(ProxyNode n) {
+  static Map<String, dynamic> _stream(ProxyNode n, String? fp) {
     final p = n.params;
     final hysteria = n.protocol == Protocol.hysteria2;
     final network = hysteria ? 'hysteria' : n.transport;
@@ -254,14 +314,14 @@ class XrayConfig {
       final alpn = _nb(p['alpn']) ?? (hysteria ? 'h3' : null);
       s['tlsSettings'] = {
         if (sni != null) 'serverName': sni,
-        if (!hysteria) 'fingerprint': _nb(p['fp']) ?? 'chrome',
+        if (!hysteria) 'fingerprint': fp ?? _nb(p['fp']) ?? 'chrome',
         if (alpn != null) 'alpn': alpn.split(',').map((e) => e.trim()).toList(),
         if (n.pinnedCert != null) 'pinnedPeerCertSha256': n.pinnedCert,
       };
     } else if (security == 'reality') {
       s['realitySettings'] = {
         'serverName': sni ?? '',
-        'fingerprint': _nb(p['fp']) ?? 'chrome',
+        'fingerprint': fp ?? _nb(p['fp']) ?? 'chrome',
         'publicKey': p['pbk'] ?? '',
         'shortId': p['sid'] ?? '',
         if (_nb(p['spx']) != null) 'spiderX': p['spx'],

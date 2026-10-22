@@ -82,6 +82,7 @@ jobs:
           rm -f test/widget_test.dart
           python3 tools/patch_android.py > report/gradle-patch.txt
           cp catalog/catalog.json assets/catalog.json
+          python3 tools/changelog.py "$VERSION"
 
       - name: Анализ кода
         run: |

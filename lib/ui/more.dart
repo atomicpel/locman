@@ -234,6 +234,24 @@ class _LinkPageState extends State<_LinkPage> with WidgetsBindingObserver {
         ),
         const SizedBox(height: 16),
         SettingRow(
+          title: 'При переключении оставаться в той же стране',
+          line: 'Если узел перестанет отвечать, «Лоцман» перейдёт только на узел той же страны, и поиск быстрее '
+              'тоже ищет в ней. Нужно приложениям, которые следят за страной: ТикТок, стриминг.',
+          control: PillSwitch(on: s.sameCountry, onChanged: s.setSameCountry),
+        ),
+        const SizedBox(height: 12),
+        SettingRow(
+          title: 'Свой узел для БС и для ЧС',
+          line: 'Запоминаем узел, который вы выбрали при белых списках и при обычных блокировках, и сами '
+              'переходим на него, когда меняется сеть (Wi-Fi ↔ мобильная) или при подключении.'
+              '${s.modeNodes.isEmpty ? '' : ' Сейчас: ${[
+                  if (s.nodeById(s.modeNodes['white']) != null) 'БС — ${s.nodeById(s.modeNodes['white'])!.title}',
+                  if (s.nodeById(s.modeNodes['black']) != null) 'ЧС — ${s.nodeById(s.modeNodes['black'])!.title}',
+                ].join(', ')}.'}',
+          control: PillSwitch(on: s.modeNodesOn, onChanged: s.setModeNodesOn),
+        ),
+        const SizedBox(height: 12),
+        SettingRow(
           title: 'Искать узел быстрее в фоне',
           line: 'Сразу подключаемся к первому ответившему узлу, а потом проверяем остальные и меряем скорость лучших. '
               'Нашли заметно быстрее — предложим переключиться. Тратит около 15–20 МБ за поиск.',
@@ -489,6 +507,35 @@ class _ProbePage extends StatelessWidget {
           style: p.text(14, color: p.muted),
         ),
         const SizedBox(height: 16),
+        const SectionTitle('Адрес проверки'),
+        const SizedBox(height: 8),
+        Segment<String>(
+          value: s.testKey,
+          onChanged: s.setTestKey,
+          options: [for (final e in testUrls.entries) (e.key, e.value.$1)],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Через узел открывается этот адрес, по ответу считается задержка. Им же сторож проверяет туннель, '
+          'пока VPN включён. Если проверка врёт на вашей сети — попробуйте другой.',
+          style: p.text(14, color: p.muted),
+        ),
+        const SizedBox(height: 16),
+        SettingRow(
+          title: 'Рабочие профили узлов',
+          line: s.profiles.values.where((x) => !x.isPlain).isEmpty
+              ? 'Если узел не пропускает данные, «Лоцман» пробует подключиться к нему иначе: как Firefox или Edge, '
+                  'всё через одно соединение, с дроблением или без. Найденный способ запоминается.'
+              : 'Узлов с особым профилем: ${s.profiles.values.where((x) => !x.isPlain).length}. '
+                  'Они подключаются найденным способом.',
+          control: s.profiles.isEmpty
+              ? null
+              : TextButton(
+                  onPressed: s.clearProfiles,
+                  child: Text('Забыть', style: p.text(14, color: p.danger)),
+                ),
+        ),
+        const SizedBox(height: 16),
         SettingRow(
           title: 'Чёрный список серверов',
           line: s.banned.isEmpty
@@ -569,6 +616,8 @@ class _AboutPage extends StatelessWidget {
           const SizedBox(height: 8),
           Text('Обновления: ${s.updateError}', style: p.text(13, color: p.danger)),
         ],
+        const SizedBox(height: 12),
+        PillButton(label: 'История изменений', onTap: s.openChangelog),
         const SizedBox(height: 12),
         PillButton(label: 'Страница проекта', onTap: () => Native.openUrl('https://github.com/$repo')),
         const SizedBox(height: 24),

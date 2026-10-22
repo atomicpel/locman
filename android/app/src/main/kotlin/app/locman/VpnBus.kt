@@ -8,6 +8,8 @@ import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 
+const val DEFAULT_TEST_URL = "https://www.gstatic.com/generate_204"
+
 /** Запасной узел для сторожа: полный конфиг и урезанный для проверки. */
 data class Backup(val config: String, val test: String, val name: String, val nodeId: String) {
     fun toJson(): JSONObject = JSONObject().put("config", config).put("test", test).put("name", name).put("nodeId", nodeId)
@@ -43,12 +45,15 @@ data class StartSpec(
     val tunMode: String = "xray",
     /** Запасные узлы на случай, если текущий перестанет отвечать (сторож переключится сам). */
     val backups: List<Backup> = emptyList(),
+    /** Адрес, которым сторож проверяет туннель. */
+    val testUrl: String = DEFAULT_TEST_URL,
 ) {
     fun toJson(): String = JSONObject()
         .put("config", config).put("name", name).put("nodeId", nodeId)
         .put("socksPort", socksPort).put("httpPort", httpPort).put("user", user).put("pass", pass)
         .put("bypass", JSONArray(bypass)).put("mtu", mtu).put("tunMode", tunMode)
         .put("backups", JSONArray(backups.map { it.toJson() }))
+        .put("testUrl", testUrl)
         .toString()
 
     companion object {
@@ -76,6 +81,7 @@ data class StartSpec(
                 mtu = j.optInt("mtu", 1500),
                 tunMode = j.optString("tunMode", "xray"),
                 backups = Backup.list(j.optJSONArray("backups")),
+                testUrl = j.optString("testUrl", DEFAULT_TEST_URL).ifBlank { DEFAULT_TEST_URL },
             )
         }.getOrNull()
 
@@ -110,9 +116,14 @@ object VpnBus {
     var state: VpnState = VpnState.Idle
         private set
 
+    /** Контекст приложения — чтобы обновлять виджет при смене состояния. */
+    @Volatile
+    var app: Context? = null
+
     fun set(s: VpnState) {
         state = s
         emit(s.toMap())
+        app?.let { ctx -> main.post { runCatching { PowerWidget.refresh(ctx) } } }
     }
 
     /** Сторож: "failover" (переключился сам), "stalled" (запасные не помогли), "alive". */
@@ -122,6 +133,18 @@ object VpnBus {
 
     fun traffic(up: Long, down: Long, upTotal: Long, downTotal: Long) {
         emit(mapOf("type" to "traffic", "up" to up, "down" to down, "upTotal" to upTotal, "downTotal" to downTotal))
+    }
+
+    /** Сменилась сеть (Wi-Fi ↔ мобильная): экран сам решит, нужен ли другой узел. */
+    fun network() = emit(mapOf("type" to "network"))
+
+    /** Ссылка импорта locman://import?url=… */
+    @Volatile
+    var pendingLink: String? = null
+
+    fun link(url: String) {
+        pendingLink = url
+        emit(mapOf("type" to "link", "url" to url))
     }
 
     private fun emit(event: Map<String, Any?>) {

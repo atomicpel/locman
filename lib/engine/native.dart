@@ -43,6 +43,17 @@ class WatchEvent {
   final String? nodeId;
 }
 
+/// Сменилась сеть (Wi-Fi ↔ мобильная).
+class NetworkEvent {
+  const NetworkEvent();
+}
+
+/// Пришла ссылка locman://import.
+class LinkEvent {
+  const LinkEvent(this.url);
+  final String url;
+}
+
 class Traffic {
   const Traffic(this.up, this.down, this.upTotal, this.downTotal);
   final int up;
@@ -54,7 +65,9 @@ class Traffic {
 
 class NativeInfo {
   NativeInfo(this.filesDir, this.cacheDir, this.versionName, this.versionCode, this.xray, this.abis,
-      {this.smoke = false, this.smokeSkin, this.smokeTun, this.extDir});
+      {this.smoke = false, this.smokeSkin, this.smokeTun, this.extDir, this.model = '', this.release = ''});
+  final String model;
+  final String release;
   final String? extDir;
   final String? smokeTun;
   final bool smoke;
@@ -86,6 +99,8 @@ class Native {
         if (m['type'] == 'watch') {
           return WatchEvent(m['kind'] as String, m['name'] as String?, m['nodeId'] as String?);
         }
+        if (m['type'] == 'network') return const NetworkEvent();
+        if (m['type'] == 'link') return LinkEvent((m['url'] ?? '') as String);
         if (m['type'] == 'traffic') {
           return Traffic(
             (m['up'] as num).toInt(),
@@ -110,6 +125,8 @@ class Native {
       smokeSkin: m['skin'] as String?,
       smokeTun: m['tun'] as String?,
       extDir: m['extDir'] as String?,
+      model: (m['model'] as String?) ?? '',
+      release: (m['release'] as String?) ?? '',
     );
   }
 
@@ -129,6 +146,7 @@ class Native {
     String tunMode = 'xray',
     List<Map<String, String>> backups = const [],
     int mtu = 1500,
+    String? testUrl,
   }) =>
       _core.invokeMethod('start', {
         'config': config,
@@ -142,7 +160,27 @@ class Native {
         'mtu': mtu,
         'tunMode': tunMode,
         'backups': backups,
+        if (testUrl != null) 'testUrl': testUrl,
       });
+
+  /// Ссылка импорта, с которой открыли приложение (забирается один раз).
+  static Future<String?> takeLink() async {
+    try {
+      return await _core.invokeMethod<String>('takeLink');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Заряд батареи: (процент или -1, заряжается ли).
+  static Future<(int, bool)> battery() async {
+    try {
+      final m = await _core.invokeMethod<Map>('battery');
+      return (((m?['level'] as num?) ?? -1).toInt(), m?['charging'] == true);
+    } catch (_) {
+      return (-1, false);
+    }
+  }
 
   static Future<void> stop() => _core.invokeMethod('stop');
 

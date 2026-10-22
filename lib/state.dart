@@ -52,10 +52,21 @@ const dnsMeta = {'cloud': 'Cloudflare', 'quad': 'Quad9', 'google': 'Google'};
 const intervalMeta = {'manual': 'Вручную', '1h': 'Каждый час', '6h': 'Каждые 6 ч', '24h': 'Раз в сутки'};
 const intervalHours = {'manual': 0, '1h': 1, '6h': 6, '24h': 24};
 
-const seekLabels = ['Смотрим сеть', 'Стучимся по TCP', 'Проверяем ответ', 'Выбираем ход'];
+const seekLabels = ['Смотрим сеть', 'Стучимся по TCP', 'Проверяем ответ', 'Качаем через узел', 'Выбираем ход'];
+
+/// Шаг «Выбираем ход» — последний.
+const seekFinal = 5;
 
 const repo = 'atomicpel/locman';
-const testUrl = 'https://www.gstatic.com/generate_204';
+
+/// Адрес проверки: через узел открывается он, по ответу считается задержка.
+/// Тот же адрес проверяет туннель, пока VPN включён.
+const testUrls = {
+  'google': ('Google', 'https://www.gstatic.com/generate_204'),
+  'cloudflare': ('Cloudflare', 'https://cp.cloudflare.com/generate_204'),
+  'apple': ('Apple', 'http://captive.apple.com/hotspot-detect.html'),
+  'firefox': ('Firefox', 'http://detectportal.firefox.com/success.txt'),
+};
 
 /// Предложение переключиться на узел быстрее.
 class Offer {
@@ -151,6 +162,25 @@ class AppState extends ChangeNotifier {
 
   /// Чёрный список серверов (адрес:порт): к ним не подключаемся ни из какой подписки.
   Set<String> banned = {};
+
+  /// Рабочий «профиль» узла (отпечаток, mux, дробление) и DNS, который через него отвечает.
+  Map<String, NodeProfile> profiles = {};
+
+  /// Свой узел для белых списков и для обычных блокировок: 'white'/'black' → id узла.
+  Map<String, String> modeNodes = {};
+  bool modeNodesOn = true;
+
+  /// При автопереключении оставаться в стране текущего узла (для ТикТока и т. п.).
+  bool sameCountry = false;
+
+  /// Адрес проверки узлов (ключ из [testUrls]).
+  String testKey = 'google';
+
+  /// Случайный номер устройства для платных панелей с ограничением числа устройств (HWID).
+  String hwid = '';
+
+  /// Последняя версия, для которой показали «Что нового».
+  String? seenVersion;
   Set<String> noFrag = {};
   String? pinnedId;
   String? lastNodeId;
@@ -235,6 +265,10 @@ class AppState extends ChangeNotifier {
       files = Files(Directory.systemTemp.createTempSync('locman').path);
     }
     await _loadSettings();
+    if (hwid.isEmpty) {
+      hwid = Net.token(32);
+      _save();
+    }
     await _loadHealth();
     await _loadCatalog();
     await _loadCachedSubscriptions();
@@ -245,6 +279,16 @@ class AppState extends ChangeNotifier {
     try {
       _applyStatus(await Native.state());
     } catch (_) {}
+    await _loadChangelog();
+    final v = info?.versionName;
+    if (v != null && info?.smoke != true) {
+      if (seenVersion != null && seenVersion != v && onboarded) whatsNew = true;
+      if (seenVersion != v) {
+        seenVersion = v;
+        _save();
+      }
+    }
+    unawaited(_takeLink());
 
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     _periodic = Timer.periodic(const Duration(minutes: 15), (_) => unawaited(_background()));
@@ -360,7 +404,9 @@ class AppState extends ChangeNotifier {
     final catalogAge = DateTime.now().difference(catalog?.generatedAt ?? DateTime(2000));
     if (catalogAge > const Duration(hours: 12)) await refreshCatalog(quiet: true);
     await refreshDue();
-    await checkUpdate(quiet: true);
+    // При низком заряде фоновую проверку обновлений откладываем.
+    final (level, charging) = await Native.battery();
+    if (charging || level < 0 || level > 20) await checkUpdate(quiet: true);
   }
 
   void onResume() {
@@ -401,6 +447,16 @@ class AppState extends ChangeNotifier {
     pickFrom = j['pickFrom'] == 'reality' ? 'reality' : 'all';
     autoFaster = j['autoFaster'] != false;
     countries = j['countries'] == 'noRu' ? 'noRu' : 'all';
+    profiles = {
+      for (final e in ((j['profiles'] as Map?) ?? const {}).entries)
+        if (NodeProfile.fromJson(e.value) != null) e.key.toString(): NodeProfile.fromJson(e.value)!,
+    };
+    modeNodes = Map<String, String>.from((j['modeNodes'] as Map?) ?? const {});
+    modeNodesOn = j['modeNodesOn'] != false;
+    sameCountry = j['sameCountry'] == true;
+    testKey = testUrls.containsKey(j['testKey']) ? j['testKey'] as String : 'google';
+    hwid = (j['hwid'] as String?) ?? '';
+    seenVersion = j['seenVersion'] as String?;
     banned = ((j['banned'] as List?) ?? const []).map((e) => e.toString()).toSet();
     noFrag = ((j['noFrag'] as List?) ?? const []).map((e) => e.toString()).toSet();
     pinnedId = j['pinnedId'] as String?;
@@ -441,6 +497,15 @@ class AppState extends ChangeNotifier {
         'pickFrom': pickFrom,
         'autoFaster': autoFaster,
         'countries': countries,
+        'profiles': {
+          for (final e in profiles.entries.toList().reversed.take(800)) e.key: e.value.toJson(),
+        },
+        'modeNodes': modeNodes,
+        'modeNodesOn': modeNodesOn,
+        'sameCountry': sameCountry,
+        'testKey': testKey,
+        'hwid': hwid,
+        'seenVersion': seenVersion,
         'banned': banned.toList(),
         'noFrag': noFrag.take(800).toList(),
         'pinnedId': pinnedId,
@@ -514,13 +579,49 @@ class AppState extends ChangeNotifier {
   void setDns(String d) {
     _set(() => dns = d);
     log('DNS: ${dnsMeta[d]}');
+    _reapply();
   }
 
-  void setDirectRu(bool v) => _set(() => directRu = v);
+  void setSameCountry(bool v) {
+    _set(() => sameCountry = v);
+    log(v ? 'При переключении оставаться в той же стране' : 'При переключении — любая страна');
+    _pushBackups();
+  }
+
+  void setModeNodesOn(bool v) {
+    _set(() => modeNodesOn = v);
+    log(v ? 'Свой узел для БС и ЧС' : 'Без своих узлов для БС и ЧС');
+  }
+
+  void setTestKey(String k) {
+    _set(() => testKey = k);
+    log('Адрес проверки: ${testUrls[k]!.$1}');
+  }
+
+  String get testUrl => testUrls[testKey]!.$2;
+
+  Timer? _reapplyTimer;
+
+  /// Настройки, влияющие на сам туннель, применяем сразу — переподключаемся на тот же узел.
+  void _reapply() {
+    if (phase != Phase.on || activeId == null) return;
+    _reapplyTimer?.cancel();
+    _reapplyTimer = Timer(const Duration(milliseconds: 800), () {
+      if (phase == Phase.on && activeId != null) unawaited(connect(nodeId: activeId, force: true));
+    });
+  }
+
+  void setDirectRu(bool v) {
+    _set(() => directRu = v);
+    _reapply();
+  }
   void setAutoConnect(bool v) => _set(() => autoConnect = v);
   void setHideInsecure(bool v) => _set(() => hideInsecure = v);
   void setHideDupes(bool v) => _set(() => hideDupes = v);
-  void setFragment(bool v) => _set(() => fragment = v);
+  void setFragment(bool v) {
+    _set(() => fragment = v);
+    _reapply();
+  }
   void setTunEngine(String v) => _set(() => tunEngine = v);
   void setAutoFaster(bool v) {
     _set(() => autoFaster = v);
@@ -548,9 +649,12 @@ class AppState extends ChangeNotifier {
 
   void toggleCollapsed(String id) => _set(() => collapsed[id] = !(collapsed[id] ?? false));
 
-  void toggleExclude(String package) => _set(() {
-        if (!excludes.remove(package)) excludes.add(package);
-      });
+  void toggleExclude(String package) {
+    _set(() {
+      if (!excludes.remove(package)) excludes.add(package);
+    });
+    _reapply();
+  }
 
   void resetAll() {
     unawaited(disconnect());
@@ -569,6 +673,11 @@ class AppState extends ChangeNotifier {
       tunEngine = 'xray';
       pickFrom = 'all';
       countries = 'all';
+      sameCountry = false;
+      modeNodesOn = true;
+      modeNodes.clear();
+      profiles.clear();
+      testKey = 'google';
       pinnedId = null;
       excludes.clear();
       enabledOverrides.clear();
@@ -711,7 +820,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     final info = sourceInfo.putIfAbsent(s.id, SourceInfo.new);
     try {
-      final r = await Net.getAny(s.mirrors);
+      final r = await Net.getAny(s.mirrors, headers: s.isMine ? _deviceHeaders : const {});
       final body = r.body;
       final parsed = await compute(_parseOneSync, (body, s.id, r.headers));
       if (parsed.nodes.isEmpty) {
@@ -739,6 +848,15 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Заголовки для платных панелей (Remnawave, Marzban) с ограничением числа устройств.
+  /// Уходят только самой панели: при перенаправлении на другой сайт не передаются.
+  Map<String, String> get _deviceHeaders => {
+        'x-hwid': hwid,
+        'x-device-os': 'Android',
+        if (info != null && info!.release.isNotEmpty) 'x-ver-os': info!.release,
+        if (info != null && info!.model.isNotEmpty) 'x-device-model': info!.model,
+      };
 
   String? _usageText(Usage? u) {
     if (u == null) return null;
@@ -975,6 +1093,15 @@ class AppState extends ChangeNotifier {
     flash('${n.title} убран из чёрного списка');
   }
 
+  void clearProfiles() {
+    _set(() {
+      profiles.clear();
+      noFrag.clear();
+    });
+    log('Профили узлов забыты');
+    flash('Профили узлов забыты');
+  }
+
   void clearBans() {
     final count = banned.length;
     _set(() => banned.clear());
@@ -1040,15 +1167,30 @@ class AppState extends ChangeNotifier {
 
   bool _fragFor(ProxyNode n) => fragment && n.canFragment && !noFrag.contains(n.id);
 
-  String _testConfig(ProxyNode n, {required bool frag}) => XrayConfig.build(n, forTest: true, dns: dns, fragment: frag);
+  NodeProfile? profileOf(ProxyNode n) => profiles[n.id];
+
+  String _testConfig(ProxyNode n, {required bool frag, NodeProfile? profile}) =>
+      XrayConfig.build(n, forTest: true, dns: dns, fragment: frag, profile: profile ?? profiles[n.id]);
+
+  /// Не больше 3 одновременных проверок к одному серверу: провайдер реже замечает проверку,
+  /// а рабочие узлы реже получают ложное «нет ответа».
+  final Map<String, _Gate> _hostGates = {};
+
+  /// [gate] — общий ограничитель проверок; берётся уже внутри очереди к серверу,
+  /// чтобы ожидание одного сервера не занимало места других.
+  Future<int> _measure(ProxyNode n, String config, {_Gate? gate}) =>
+      (_hostGates[n.address.toLowerCase()] ??= _Gate(3)).run(() {
+        final url = testUrl;
+        return gate == null ? Native.measure(config, url) : gate.run(() => Native.measure(config, url));
+      });
 
   /// Настоящая проверка: запрос через узел силами Xray; для Hysteria2 и JSON — только так.
   /// С фрагментацией не прошёл — пробуем без неё и запоминаем, что этому узлу она мешает.
-  Future<int> _realTest(ProxyNode n) async {
+  Future<int> _realTest(ProxyNode n, {_Gate? gate}) async {
     final frag = _fragFor(n);
-    final d = await Native.measure(_testConfig(n, frag: frag), testUrl);
-    if (d > 0 || !frag) return d;
-    final plain = await Native.measure(_testConfig(n, frag: false), testUrl);
+    final d = await _measure(n, _testConfig(n, frag: frag), gate: gate);
+    if (d > 0 || !frag || profiles[n.id]?.frag != null) return d;
+    final plain = await _measure(n, _testConfig(n, frag: false), gate: gate);
     if (plain > 0) noFrag.add(n.id);
     return plain;
   }
@@ -1059,6 +1201,71 @@ class AppState extends ChangeNotifier {
       if (tcp < 0) return -1;
     }
     return _realTest(n);
+  }
+
+  /// Варианты подключения к узлу, по порядку: сохранённый, обычный, с другим дроблением,
+  /// отпечатки Firefox и Edge, всё через одно соединение.
+  List<NodeProfile> _variants(ProxyNode n) {
+    final out = <NodeProfile>[];
+    void add(NodeProfile p) {
+      if (!out.contains(p)) out.add(p);
+    }
+
+    final saved = profiles[n.id];
+    if (saved != null) add(saved.withDns(null));
+    add(const NodeProfile());
+    if (n.canFragment) add(NodeProfile(frag: !_fragFor(n)));
+    if (n.usesFingerprint) {
+      add(const NodeProfile(fp: 'firefox'));
+      add(const NodeProfile(fp: 'edge'));
+    }
+    if (n.canMux) add(const NodeProfile(mux: true));
+    return out;
+  }
+
+  /// Проверка пути через узел отдельным экземпляром ядра: данные больше 16 КБ, Telegram, DNS.
+  /// Пробует до [limit] вариантов подключения; рабочий запоминается для узла.
+  Future<_PathResult> _path(ProxyNode n, {int limit = 2, bool Function()? cancelled}) async {
+    final saved = profiles[n.id];
+    for (final variant in _variants(n).take(limit)) {
+      if (cancelled?.call() == true) return const _PathResult(_Verdict.noData);
+      final check = await _probePath(n, variant, dnsOrder(saved?.dns ?? dns));
+      if (check == null) continue;
+      if (check.data && check.telegram && check.dns != null) {
+        final found = variant.withDns(check.dns);
+        if (profiles[n.id] != found) {
+          profiles[n.id] = found;
+          if (!found.isPlain) log('${n.title}: рабочий профиль — ${found.label}');
+          _save();
+        }
+        return _PathResult(_Verdict.ok, speed: check.speed);
+      }
+      if (check.data && !check.telegram) return _PathResult(_Verdict.noTelegram, speed: check.speed);
+      if (check.data) return _PathResult(_Verdict.noDns, speed: check.speed);
+    }
+    return const _PathResult(_Verdict.noData);
+  }
+
+  Future<PathCheck?> _probePath(ProxyNode n, NodeProfile variant, List<String> dnsList) async {
+    final local = LocalProxy(
+      socksPort: await Net.freePort(),
+      httpPort: await Net.freePort(),
+      user: Net.token(12),
+      pass: Net.token(24),
+    );
+    final config = XrayConfig.build(n,
+        local: local, directRu: false, dns: dns, fragment: _fragFor(n), profile: variant, encryptedDns: false);
+    int? id;
+    try {
+      id = await Native.probeStart(config);
+      if (id == null) return null;
+      await Future.delayed(const Duration(milliseconds: 300));
+      return await Net.checkPath(local, dns: dnsList);
+    } catch (_) {
+      return null;
+    } finally {
+      if (id != null) unawaited(Native.probeStop(id).catchError((_) {}));
+    }
   }
 
   Future<void> checkNode(ProxyNode n) async {
@@ -1101,7 +1308,7 @@ class AppState extends ChangeNotifier {
           return;
         }
       }
-      final d = await real.run(() => Native.measure(_testConfig(n, frag: _fragFor(n)), testUrl));
+      final d = await _measure(n, _testConfig(n, frag: _fragFor(n)), gate: real);
       _record(n.id, d, real: true);
       checkingDone++;
       _throttledNotify();
@@ -1170,7 +1377,11 @@ class AppState extends ChangeNotifier {
     await Future.delayed(const Duration(seconds: 3));
     if (stale()) return;
 
-    final cands = _candidates(_kindForMode()).where((n) => !_huntSeen.contains(n.id)).take(200).toList();
+    final country = _stickCountry;
+    final cands = _candidates(_kindForMode())
+        .where((n) => !_huntSeen.contains(n.id) && (country == null || n.place.code == country))
+        .take(200)
+        .toList();
     if (cands.isEmpty) {
       huntStatus = null;
       flash('Других живых узлов не осталось');
@@ -1187,7 +1398,7 @@ class AppState extends ChangeNotifier {
       if (!n.coreOnly && await Net.tcping(n.address, n.port, timeout: const Duration(milliseconds: 1500)) < 0) {
         _record(n.id, -1, real: false);
       } else {
-        final d = await gate.run(() async => stale() ? 0 : await _realTest(n));
+        final d = stale() ? 0 : await _realTest(n, gate: gate);
         if (d != 0) _record(n.id, d, real: true);
         if (d > 0) delays[n] = d;
       }
@@ -1239,12 +1450,17 @@ class AppState extends ChangeNotifier {
       user: Net.token(12),
       pass: Net.token(24),
     );
-    final config = XrayConfig.build(n, local: local, directRu: false, dns: dns, fragment: _fragFor(n));
+    final config = XrayConfig.build(n, local: local, directRu: false, dns: dns, fragment: _fragFor(n), profile: profiles[n.id]);
     int? id;
     try {
       id = await Native.probeStart(config);
       if (id == null) return 0;
       await Future.delayed(const Duration(milliseconds: 400));
+      // Предлагаем только узел, через который идут данные, открывается Telegram и работает DNS.
+      final path = await Net.checkPath(local, dns: dnsOrder(profiles[n.id]?.dns ?? dns));
+      if (!path.data || !path.telegram || path.dns == null) return 0;
+      final saved = profiles[n.id] ?? const NodeProfile();
+      if (saved.dns != path.dns) profiles[n.id] = saved.withDns(path.dns);
       return await Net.speedTest(proxy: local);
     } catch (_) {
       return 0;
@@ -1343,10 +1559,29 @@ class AppState extends ChangeNotifier {
     final known = fits.where((n) => latencyOf(n.id) > 0).toList()
       ..sort((a, b) => latencyOf(a.id).compareTo(latencyOf(b.id)));
     final rest = fits.where((n) => latencyOf(n.id) <= 0).toList()..shuffle(_random);
-    return [...known, ...rest];
+    final all = [...known, ...rest];
+    // Вид соединения, который провайдер сейчас режет, — в конец: обычно режут вид целиком.
+    // С «той же страной» узлы этой страны — вперёд.
+    final country = _stickCountry;
+    int rank(ProxyNode n) => (failedKinds.contains(n.kind) ? 2 : 0) + (country != null && n.place.code != country ? 1 : 0);
+    return mergeSortStable(all, (a, b) => rank(a).compareTo(rank(b)));
   }
 
-  Future<void> connect({bool ignorePin = false, String? nodeId}) async {
+  /// Виды соединений, через которые в этом поиске не пошли данные.
+  final Set<String> failedKinds = {};
+
+  /// Страна, в которой оставаться при переключении (если включено).
+  String? get _stickCountry {
+    if (!sameCountry) return null;
+    return nodeById(activeId ?? lastNodeId)?.place.code;
+  }
+
+  Future<void> connect({bool ignorePin = false, String? nodeId, bool force = false}) async {
+    // Уже подключены к этому узлу — ядро не перезапускаем.
+    if (!force && nodeId != null && nodeId == activeId && phase == Phase.on) {
+      flash('Уже подключены к этому узлу');
+      return;
+    }
     final token = ++_seekGen;
     bool cancelled() => token != _seekGen;
     stopHunt();
@@ -1356,12 +1591,13 @@ class AppState extends ChangeNotifier {
       flash('Включите источник');
       return;
     }
+    final quiet = force && phase == Phase.on;
     phase = Phase.seek;
     seekStep = 1;
     failText = null;
-    tab = AppTab.home;
+    if (!quiet) tab = AppTab.home;
     notifyListeners();
-    log(ignorePin ? 'Ищем рабочий узел' : 'Прокладываем ход');
+    log(force ? 'Применяем настройки' : (ignorePin ? 'Ищем рабочий узел' : 'Прокладываем ход'));
 
     bool permitted;
     try {
@@ -1377,20 +1613,31 @@ class AppState extends ChangeNotifier {
 
     // Шаг 1: смотрим сеть. Если туннель уже поднят, проверка напрямую всё равно честная:
     // само приложение в туннель не заходит.
-    if (mode == 'auto') {
+    if (mode == 'auto' && !force) {
       detected = await Net.detectKind();
       if (cancelled()) return;
     }
     final kind = _kindForMode();
+    failedKinds.clear();
 
     final tried = <String>{};
     var started = false;
     ProxyNode? chosen;
+    var userPick = false;
     if (nodeId != null) {
       chosen = nodeById(nodeId);
+      userPick = !force;
     } else if (!ignorePin && pinnedId != null) {
       chosen = nodeById(pinnedId);
       if (chosen != null && isBanned(chosen)) chosen = null;
+    }
+    // Свой узел для этого режима сети (белые списки / обычные блокировки).
+    if (chosen == null && !ignorePin && modeNodesOn && kind != null) {
+      final m = nodeById(modeNodes[kind.name]);
+      if (m != null && !isBanned(m) && !isDead(m.id)) {
+        chosen = m;
+        log('Узел для ${kind == NetKind.white ? 'белых списков' : 'обычных блокировок'}: ${m.title}');
+      }
     }
 
     for (var attempt = 0; attempt < 4; attempt++) {
@@ -1403,19 +1650,32 @@ class AppState extends ChangeNotifier {
         }
       }
       tried.add(chosen.id);
-      seekStep = 4;
+      seekStep = seekFinal;
       notifyListeners();
       started = true;
       final ok = await _bring(chosen, cancelled);
       if (cancelled()) return;
-      if (ok) return;
+      if (ok) {
+        if (userPick && kind != null) {
+          modeNodes[kind.name] = chosen.id;
+          _save();
+        }
+        return;
+      }
       _record(chosen.id, -1, real: true);
+      failedKinds.add(chosen.kind);
       log('${chosen.title} не пропускает трафик, ищем другой');
       chosen = null;
+      userPick = false;
     }
     _fail('Узлы не пропускают трафик', stopTunnel: started);
   }
 
+  /// Поиск, как Галс в Фарватере:
+  /// 1) TCP → короткий запрос через ядро → загрузка больше 16 КБ, Telegram и DNS через узел.
+  ///    Первый прошедший всё — наш, самый быстрый ищется потом в фоне (_hunt).
+  /// 2) Если таких нет — пробуем у ответивших другие профили (Firefox, Edge, mux, дробление).
+  /// 3) Если и так нет — берём самый быстрый узел, через который хотя бы идут данные.
   Future<ProxyNode?> _seek(NetKind? kind, Set<String> tried, bool Function() cancelled) async {
     final pool = _candidates(kind).where((n) => !tried.contains(n.id)).take(_poolLimit).toList();
     if (pool.isEmpty) return null;
@@ -1423,12 +1683,15 @@ class AppState extends ChangeNotifier {
     seekStep = 2;
     notifyListeners();
     _smokeSink?.call('seek pool=${pool.length}');
-    // Конвейер «кто первый»: узел, ответивший по TCP, сразу идёт на настоящую проверку,
-    // и первый прошедший её — наш. Самый быстрый ищется потом, в фоне (_hunt).
     final done = Completer<ProxyNode?>();
     final gate = _Gate(probeMeta[probe]!.$2);
+    final paths = _Gate(3);
+    final answered = <ProxyNode, int>{};
+    final partial = <ProxyNode, int>{};
+    final noData = <ProxyNode>[];
+    bool over() => cancelled() || done.isCompleted;
     unawaited(_pool(pool, _tcpParallel, (n) async {
-      if (cancelled() || done.isCompleted) return;
+      if (over()) return;
       final tcp = (n.coreOnly || _skipTcp) ? 0 : await Net.tcping(n.address, n.port);
       if (tcp < 0) {
         _record(n.id, -1, real: false);
@@ -1438,30 +1701,80 @@ class AppState extends ChangeNotifier {
         seekStep = 3;
         notifyListeners();
       }
-      final d = await gate.run(() async => (cancelled() || done.isCompleted) ? 0 : await _realTest(n));
-      if (d == 0) return;
+      final d = over() ? 0 : await _realTest(n, gate: gate);
+      if (d == 0 || over()) return;
       _record(n.id, d, real: true);
-      if (d > 0 && !done.isCompleted) done.complete(n);
+      if (d < 0) return;
+      answered[n] = d;
+      if (seekStep < 4) {
+        seekStep = 4;
+        notifyListeners();
+      }
+      final r = await paths.run(() async => over() ? const _PathResult(_Verdict.noData) : await _path(n, cancelled: over));
+      if (over()) return;
+      switch (r.verdict) {
+        case _Verdict.ok:
+          done.complete(n);
+        case _Verdict.noTelegram:
+          partial[n] = r.speed;
+          _smokeSink?.call('seek ${n.title}: нет Telegram');
+        case _Verdict.noDns:
+          partial[n] = r.speed;
+          _smokeSink?.call('seek ${n.title}: нет DNS');
+        case _Verdict.noData:
+          noData.add(n);
+          failedKinds.add(n.kind);
+      }
     }).then((_) {
       if (!done.isCompleted) done.complete(null);
       unawaited(_saveHealth());
     }));
     final first = await done.future;
-    return cancelled() ? null : first;
+    if (cancelled()) return null;
+    if (first != null) return first;
+
+    // Шаг 2: другие профили у ответивших, но не пропустивших данные — сначала быстрые.
+    if (noData.isNotEmpty) {
+      seekStep = 4;
+      log('Ищем рабочий профиль у ${min(6, noData.length)} узлов');
+      notifyListeners();
+      noData.sort((a, b) => (answered[a] ?? 9999).compareTo(answered[b] ?? 9999));
+      for (final n in noData.take(6)) {
+        if (cancelled()) return null;
+        final r = await _path(n, limit: 6, cancelled: cancelled);
+        if (r.verdict == _Verdict.ok) return n;
+        if (r.verdict != _Verdict.noData) partial[n] = r.speed;
+      }
+    }
+    if (cancelled()) return null;
+    // Шаг 3: лучше узел без Telegram/DNS-проверки, чем никакого.
+    if (partial.isNotEmpty) {
+      final best = (partial.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).first.key;
+      log('${best.title}: данные идут, но Telegram или DNS через него не работают — берём, раз лучше нет');
+      return best;
+    }
+    return null;
   }
 
   /// Запасные узлы для сторожа в службе: свежие живые, кроме текущего, лучшие по задержке.
   /// Конфиги собираются с теми же локальными входами, что у поднятого туннеля.
   List<Map<String, String>> _backups(ProxyNode current, LocalProxy local) {
+    // С «той же страной» сторож переключается только на узлы страны текущего.
+    final country = sameCountry ? current.place.code : null;
     final list = _candidates(_kindForMode())
-        .where((n) => n.id != current.id && latencyOf(n.id) > 0)
+        .where((n) => n.id != current.id && latencyOf(n.id) > 0 && (country == null || n.place.code == country))
         .toList()
       ..sort((a, b) => latencyOf(a.id).compareTo(latencyOf(b.id)));
     return [
       for (final n in list.take(10))
         {
           'config': XrayConfig.build(n,
-              local: local, directRu: directRu, dns: dns, fragment: _fragFor(n), xrayTun: tunEngine == 'xray'),
+              local: local,
+              directRu: directRu,
+              dns: dns,
+              fragment: _fragFor(n),
+              xrayTun: tunEngine == 'xray',
+              profile: profiles[n.id]),
           'test': _testConfig(n, frag: _fragFor(n)),
           'name': n.title,
           'nodeId': n.id,
@@ -1502,7 +1815,7 @@ class AppState extends ChangeNotifier {
     }
     final xrayTun = tunEngine == 'xray';
     final config = XrayConfig.build(target,
-        local: local, directRu: directRu, dns: dns, fragment: _fragFor(n), xrayTun: xrayTun);
+        local: local, directRu: directRu, dns: dns, fragment: _fragFor(n), xrayTun: xrayTun, profile: profiles[n.id]);
     final bypass = {...excludes, if (directRu) ...directApps}.toList();
     _smokeSink?.call('bring ${target.address} tun=$tunEngine');
     // Ждём статус именно этого узла, чтобы не принять «подключено» от предыдущего.
@@ -1521,6 +1834,7 @@ class AppState extends ChangeNotifier {
         bypass: bypass,
         tunMode: tunEngine,
         backups: _backups(n, local),
+        testUrl: testUrl,
       );
     } catch (e) {
       log('Служба VPN не запустилась: ${_short(e)}');
@@ -1540,7 +1854,7 @@ class AppState extends ChangeNotifier {
     Net.tunnel = local;
     var ok = false;
     for (var i = 0; i < 2 && !ok; i++) {
-      ok = await Net.probeTunnel();
+      ok = await Net.probeTunnel(url: testUrl.startsWith('https') ? testUrl : 'https://www.gstatic.com/generate_204');
       if (cancelled()) return false;
     }
     if (!ok) return false;
@@ -1597,7 +1911,111 @@ class AppState extends ChangeNotifier {
       _applyStatus(e);
     } else if (e is WatchEvent) {
       _onWatch(e);
+    } else if (e is NetworkEvent) {
+      _onNetwork();
+    } else if (e is LinkEvent) {
+      unawaited(_takeLink());
     }
+  }
+
+  Timer? _netTimer;
+
+  /// Сменилась сеть. В режиме «Авто» смотрим, не сменились ли белые списки на обычные
+  /// блокировки (или наоборот), и переходим на узел для нового режима.
+  void _onNetwork() {
+    if (phase != Phase.on || mode != 'auto') return;
+    _netTimer?.cancel();
+    _netTimer = Timer(const Duration(seconds: 4), () async {
+      if (phase != Phase.on) return;
+      final before = detected;
+      final kindNow = await Net.detectKind();
+      if (kindNow == null || kindNow == before || phase != Phase.on) return;
+      detected = kindNow;
+      final label = kindNow == NetKind.white ? 'белые списки' : 'обычные блокировки';
+      log('Сеть сменилась: $label');
+      final target = modeNodesOn ? nodeById(modeNodes[kindNow.name]) : null;
+      final active = nodeById(activeId);
+      final source = active == null ? null : sourceById(active.sourceId);
+      if (target != null && target.id != activeId && !isBanned(target)) {
+        flash('Сеть сменилась ($label) — переходим на ${target.title}');
+        unawaited(connect(nodeId: target.id, force: true));
+      } else if (source != null && !source.fits(kindNow)) {
+        flash('Сеть сменилась ($label) — ищем подходящий узел');
+        unawaited(connect(ignorePin: true));
+      }
+    });
+  }
+
+  // ---------- Импорт по ссылке locman://import ----------
+
+  /// Ссылка, которую предлагаем добавить (показывается окном подтверждения).
+  String? pendingImport;
+
+  Future<void> _takeLink() async {
+    final raw = await Native.takeLink();
+    if (raw == null) return;
+    final link = checkImportLink(raw);
+    if (link == null) {
+      flash('Ссылка импорта не подошла');
+      return;
+    }
+    pendingImport = link;
+    notifyListeners();
+  }
+
+  /// Принимаем только http(s) и ключи узлов, одной строкой, не длиннее 4096 символов.
+  static String? checkImportLink(String raw) {
+    final v = raw.trim();
+    if (v.isEmpty || v.length > 4096 || v.contains('\n') || v.contains('\r')) return null;
+    final scheme = RegExp(r'^([a-zA-Z][a-zA-Z0-9+.-]*)://').firstMatch(v)?.group(1)?.toLowerCase();
+    const allowed = {'http', 'https', 'vless', 'vmess', 'trojan', 'ss', 'hysteria2', 'hy2'};
+    return allowed.contains(scheme) ? v : null;
+  }
+
+  Future<void> acceptImport() async {
+    final link = pendingImport;
+    pendingImport = null;
+    notifyListeners();
+    if (link == null) return;
+    final error = await addMine(link, '');
+    if (error != null) flash(error);
+  }
+
+  void dismissImport() {
+    pendingImport = null;
+    notifyListeners();
+  }
+
+  // ---------- Что нового ----------
+
+  /// Показать окно «Что нового» после обновления (один раз на версию).
+  bool whatsNew = false;
+
+  /// История изменений, встроенная в приложение: [(версия, дата, [пункты])].
+  List<(String, String, List<String>)> changelog = const [];
+
+  Future<void> _loadChangelog() async {
+    try {
+      final j = jsonDecode(await rootBundle.loadString('assets/changelog.json')) as List;
+      changelog = [
+        for (final e in j.whereType<Map>())
+          (e['version'].toString(), (e['date'] ?? '').toString(), ((e['notes'] as List?) ?? const []).map((x) => x.toString()).toList()),
+      ];
+    } catch (_) {}
+  }
+
+  /// Открыта вся история изменений (из «О приложении»).
+  bool changelogOpen = false;
+
+  void openChangelog() {
+    changelogOpen = true;
+    notifyListeners();
+  }
+
+  void closeWhatsNew() {
+    whatsNew = false;
+    changelogOpen = false;
+    notifyListeners();
   }
 
   /// Сторож в службе сам переключил узел или не нашёл живых запасных.
@@ -1835,4 +2253,22 @@ String nodeCountLabel(int count) {
   if (m10 == 1 && m100 != 11) return '$count узел';
   if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return '$count узла';
   return '$count узлов';
+}
+
+enum _Verdict { ok, noData, noTelegram, noDns }
+
+class _PathResult {
+  const _PathResult(this.verdict, {this.speed = 0});
+  final _Verdict verdict;
+  final int speed;
+}
+
+/// Устойчивая сортировка: равные элементы сохраняют порядок.
+List<T> mergeSortStable<T>(List<T> list, int Function(T, T) compare) {
+  final indexed = [for (var i = 0; i < list.length; i++) (i, list[i])];
+  indexed.sort((a, b) {
+    final c = compare(a.$2, b.$2);
+    return c != 0 ? c : a.$1.compareTo(b.$1);
+  });
+  return [for (final e in indexed) e.$2];
 }

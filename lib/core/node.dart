@@ -116,6 +116,20 @@ class ProxyNode {
       protocol != Protocol.shadowsocks &&
       (security == 'tls' || security == 'reality' || (protocol == Protocol.trojan && security.isEmpty));
 
+  /// Подставляется ли отпечаток браузера (TLS и Reality).
+  bool get usesFingerprint => canFragment;
+
+  /// Можно ли пустить всё через одно соединение (mux): не с Vision, XHTTP, Hysteria2 и SS.
+  bool get canMux =>
+      !isJson &&
+      protocol != Protocol.hysteria2 &&
+      protocol != Protocol.shadowsocks &&
+      (params['flow'] ?? '').trim().isEmpty &&
+      !isXhttp;
+
+  /// Вид соединения: провайдер обычно режет целый вид, а не один сервер.
+  String get kind => '${protocol.name}/$security/$transport';
+
   bool get _isIp => RegExp(r'^[\d.]+$').hasMatch(address) || address.contains(':');
 
   /// Нужно ли заранее искать IP сервера (адрес — домен).

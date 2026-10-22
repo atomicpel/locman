@@ -7,6 +7,7 @@ import 'package:locman/core/link_parser.dart';
 import 'package:locman/core/node.dart';
 import 'package:locman/core/subscription.dart';
 import 'package:locman/core/xray_config.dart';
+import 'package:locman/engine/net.dart';
 import 'package:locman/state.dart';
 
 const vless = 'vless://11111111-2222-3333-4444-555555555555@95.163.1.2:443'
@@ -237,4 +238,52 @@ void main() {
     expect(keys.length, 2);
     expect(crypt, 1);
   });
+
+  test('профиль узла: отпечаток, mux и DNS', () {
+    const trojan = 'trojan://pass@93.184.216.34:443?security=tls&sni=example.com&type=ws&path=%2Fw#T';
+    final n = LinkParser.parse(trojan)!;
+    expect(n.canMux, isTrue);
+    final c = jsonDecode(XrayConfig.build(n,
+        local: local, profile: const NodeProfile(fp: 'firefox', mux: true, dns: 'quad'))) as Map<String, dynamic>;
+    final out = (c['outbounds'] as List).first as Map;
+    expect(out['mux']['enabled'], isTrue);
+    expect(out['streamSettings']['tlsSettings']['fingerprint'], 'firefox');
+    final servers = (c['dns']['servers'] as List).cast<Map>();
+    expect(servers.first['address'], 'https://9.9.9.9/dns-query');
+    // Vision и XHTTP не дружат с mux.
+    expect(LinkParser.parse(vless)!.canMux, isFalse);
+    final r = jsonDecode(XrayConfig.build(LinkParser.parse(vless)!, local: local, profile: const NodeProfile(mux: true)))
+        as Map<String, dynamic>;
+    expect(((r['outbounds'] as List).first as Map).containsKey('mux'), isFalse);
+  });
+
+  test('профиль сохраняется и читается', () {
+    const p = NodeProfile(fp: 'edge', frag: false, dns: 'google');
+    expect(NodeProfile.fromJson(p.toJson()), p);
+    expect(const NodeProfile().isPlain, isTrue);
+  });
+
+  test('ссылка импорта: только http(s) и ключи, одной строкой', () {
+    expect(AppState.checkImportLink('https://panel.example/sub/abc'), 'https://panel.example/sub/abc');
+    expect(AppState.checkImportLink(vless), isNotNull);
+    expect(AppState.checkImportLink('file:///sdcard/x'), isNull);
+    expect(AppState.checkImportLink('content://x/y'), isNull);
+    expect(AppState.checkImportLink('https://a\nhttps://b'), isNull);
+    expect(AppState.checkImportLink('https://${'a' * 5000}'), isNull);
+  });
+
+  test('устойчивая сортировка', () {
+    final l = mergeSortStable([3, 1, 2, 5, 4], (a, b) => (a % 2).compareTo(b % 2));
+    expect(l, [2, 4, 3, 1, 5]);
+  });
+
+  test('DNS-запрос в формате wire и разбор ответа', () {
+    final q = Net.dnsWire('telegram.org');
+    expect(q.sublist(12, 13), [8]); // длина метки «telegram»
+    expect(q.last, 1);
+    final reply = [0, 0, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0];
+    expect(Net.dnsAnswered(reply), isTrue);
+    expect(Net.dnsAnswered([0, 0, 0x81, 0x83, 0, 1, 0, 0, 0, 0, 0, 0]), isFalse);
+  });
 }
+

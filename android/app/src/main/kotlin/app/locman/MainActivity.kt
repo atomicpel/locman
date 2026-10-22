@@ -37,6 +37,7 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         XrayEngine.init(applicationContext)
+        VpnBus.app = applicationContext
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         MethodChannel(messenger, "locman/core").setMethodCallHandler(::onCall)
         EventChannel(messenger, "locman/events").setStreamHandler(object : EventChannel.StreamHandler {
@@ -52,6 +53,29 @@ class MainActivity : FlutterActivity() {
                 sinkListener = null
             }
         })
+    }
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        takeLink(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        takeLink(intent)
+    }
+
+    /** locman://import?url=https://… или locman://import/https://… — добавить подписку или ключ. */
+    private fun takeLink(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (intent.action != Intent.ACTION_VIEW || data.scheme != "locman" || data.host != "import") return
+        val raw = data.toString()
+        if (raw.length > 4200) return
+        val value = runCatching { data.getQueryParameter("url") }.getOrNull()
+            ?: raw.substringAfter("://import", "").trimStart('/').takeIf { it.isNotEmpty() }
+            ?: return
+        VpnBus.link(value)
     }
 
     override fun onDestroy() {
@@ -88,6 +112,8 @@ class MainActivity : FlutterActivity() {
                         "skin" to intent?.getStringExtra("skin"),
                         "tun" to intent?.getStringExtra("tun"),
                         "extDir" to getExternalFilesDir(null)?.absolutePath,
+                        "model" to "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
+                        "release" to Build.VERSION.RELEASE,
                     )
                 }
             }
@@ -130,6 +156,7 @@ class MainActivity : FlutterActivity() {
                     mtu = call.argument<Int>("mtu") ?: 1500,
                     tunMode = call.argument<String>("tunMode") ?: "xray",
                     backups = Backup.fromMaps(call.argument<List<Map<String, Any?>>>("backups")),
+                    testUrl = call.argument<String>("testUrl") ?: DEFAULT_TEST_URL,
                 )
                 try {
                     LocmanVpnService.start(this, spec)
@@ -177,6 +204,18 @@ class MainActivity : FlutterActivity() {
             "probeStop" -> {
                 val id = call.argument<Int>("id")!!
                 async(result) { XrayEngine.stopProbe(id); null }
+            }
+
+            "takeLink" -> {
+                val link = VpnBus.pendingLink
+                VpnBus.pendingLink = null
+                result.success(link)
+            }
+
+            "battery" -> {
+                val bm = getSystemService(android.os.BatteryManager::class.java)
+                val level = runCatching { bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) }.getOrDefault(-1)
+                result.success(mapOf("level" to level, "charging" to bm.isCharging))
             }
 
             "apps" -> async(result) { Apps.list(this) }

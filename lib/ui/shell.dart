@@ -127,10 +127,14 @@ class _Shell extends StatelessWidget {
       AppTab.more => MoreScreen(s: s),
     };
     return PopScope(
-      canPop: s.tab == AppTab.home && s.settingsPage == null,
+      canPop: s.tab == AppTab.home && s.settingsPage == null && s.pendingImport == null && !s.whatsNew && !s.changelogOpen,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (s.settingsPage != null) {
+        if (s.pendingImport != null) {
+          s.dismissImport();
+        } else if (s.whatsNew || s.changelogOpen) {
+          s.closeWhatsNew();
+        } else if (s.settingsPage != null) {
           s.setSettingsPage(null);
         } else {
           s.setTab(AppTab.home);
@@ -173,6 +177,8 @@ class _Shell extends StatelessWidget {
                   ),
                 ),
               ),
+            if (s.pendingImport != null) _ImportCard(s: s),
+            if (s.whatsNew || s.changelogOpen) _Changelog(s: s, all: s.changelogOpen),
           ],
         ),
         bottomNavigationBar: _TabBar(s: s),
@@ -228,7 +234,7 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
-          if (s.tab == AppTab.sources)
+          if (s.tab == AppTab.sources || s.tab == AppTab.home)
             RoundIconButton(
               icon: Icons.refresh_rounded,
               label: 'Обновить все',
@@ -238,6 +244,137 @@ class _Header extends StatelessWidget {
           if (s.tab == AppTab.nodes)
             RoundIconButton(icon: Icons.speed_rounded, label: 'Проверить все', busy: s.checkingAll > 0, onTap: s.checkAll),
         ],
+      ),
+    );
+  }
+}
+
+/// Затемнение и карточка поверх экрана.
+class _Veil extends StatelessWidget {
+  const _Veil({required this.child, required this.onClose});
+  final Widget child;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    return Positioned.fill(
+      child: GestureDetector(
+        onTap: onClose,
+        child: ColoredBox(
+          color: p.bg.withValues(alpha: 0.72),
+          child: SafeArea(
+            child: Center(
+              child: GestureDetector(
+                onTap: () {},
+                child: Container(
+                  margin: const EdgeInsets.all(16),
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: p.surface,
+                    borderRadius: BorderRadius.circular(p.rCard),
+                    border: Border.all(color: p.border),
+                  ),
+                  child: child,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Подтверждение импорта по ссылке locman://import.
+class _ImportCard extends StatelessWidget {
+  const _ImportCard({required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    final link = s.pendingImport!;
+    final isSub = link.toLowerCase().startsWith('http');
+    return _Veil(
+      onClose: s.dismissImport,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(isSub ? 'Добавить подписку?' : 'Добавить ключ?', style: p.text(18, weight: FontWeight.w600, display: true)),
+          const SizedBox(height: 8),
+          Text(
+            link.length > 160 ? '${link.substring(0, 159)}…' : link,
+            style: p.text(13, color: p.muted),
+          ),
+          const SizedBox(height: 8),
+          Text('Добавляйте только ссылки от тех, кому доверяете.', style: p.text(13, color: p.muted)),
+          const SizedBox(height: 16),
+          PillButton(label: 'Добавить', primary: true, onTap: () => s.acceptImport()),
+          const SizedBox(height: 8),
+          PillButton(label: 'Отмена', onTap: s.dismissImport),
+        ],
+      ),
+    );
+  }
+}
+
+/// «Что нового» после обновления или вся история изменений.
+class _Changelog extends StatelessWidget {
+  const _Changelog({required this.s, required this.all});
+  final AppState s;
+  final bool all;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    final list = all ? s.changelog : s.changelog.take(1).toList();
+    return _Veil(
+      onClose: s.closeWhatsNew,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(all ? 'История изменений' : 'Что нового', style: p.text(18, weight: FontWeight.w600, display: true)),
+            const SizedBox(height: 8),
+            Flexible(
+              child: list.isEmpty
+                  ? Text('История недоступна', style: p.text(14, color: p.muted))
+                  : ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final (version, date, notes) in list) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(child: Text('Версия $version', style: p.text(15, weight: FontWeight.w600))),
+                              Text(date, style: p.text(12, color: p.muted)),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          for (final n in notes)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('•  ', style: p.text(14, color: p.accent)),
+                                  Expanded(child: Text(n, style: p.text(14))),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 12),
+            PillButton(label: 'Понятно', primary: true, onTap: s.closeWhatsNew),
+          ],
+        ),
       ),
     );
   }

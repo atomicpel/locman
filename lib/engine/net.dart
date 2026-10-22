@@ -28,6 +28,17 @@ class IpInfo {
   String get place => [city, if (region != null && region != city) region, country].whereType<String>().join(', ');
 }
 
+/// Что показала проверка пути через узел.
+class PathCheck {
+  const PathCheck({this.data = false, this.telegram = false, this.dns, this.speed = 0});
+  final bool data;
+  final bool telegram;
+
+  /// Какой DNS-сервер ответил через узел (null — ни один, если DNS проверяли).
+  final String? dns;
+  final int speed;
+}
+
 class HttpResult {
   HttpResult(this.status, this.body, this.headers);
   final int status;
@@ -59,6 +70,12 @@ class Net {
     return c;
   }
 
+  static HttpClient _proxied(LocalProxy p, {Duration timeout = const Duration(seconds: 8)}) => HttpClient()
+    ..connectionTimeout = timeout
+    ..idleTimeout = const Duration(seconds: 2)
+    ..userAgent = userAgent
+    ..findProxy = (_) => 'PROXY ${p.user}:${p.pass}@127.0.0.1:${p.httpPort}';
+
   /// Порядок попыток: через узел (если поднят), затем напрямую.
   static List<bool> get routes => tunnel != null ? const [true, false] : const [false];
 
@@ -67,24 +84,42 @@ class Net {
     bool viaTunnel = false,
     Duration timeout = const Duration(seconds: 25),
     int maxBytes = maxBody,
+    Map<String, String> headers = const {},
   }) async {
-    final uri = Uri.parse(url);
-    if (uri.scheme != 'https' && uri.scheme != 'http') throw const FormatException('нужна ссылка http(s)');
-    if (_isLocal(uri.host)) throw const FormatException('адрес указывает на сам телефон');
+    var uri = Uri.parse(url);
+    final origin = uri.host.toLowerCase();
     final client = _client(viaTunnel: viaTunnel);
     Future<HttpResult> run() async {
-      final req = await client.getUrl(uri);
-      req.followRedirects = true;
-      req.maxRedirects = 5;
-      final resp = await req.close();
-      final headers = <String, String>{};
-      resp.headers.forEach((k, v) => headers[k.toLowerCase()] = v.join(', '));
-      final bytes = BytesBuilder(copy: false);
-      await for (final chunk in resp) {
-        bytes.add(chunk);
-        if (bytes.length > maxBytes) throw const HttpException('ответ больше 8 МБ');
+      // Перенаправления проверяем сами: не уходим с https на http, не идём на адреса
+      // самого телефона и не отдаём служебные заголовки (HWID, модель) чужому сайту.
+      for (var hop = 0; hop <= 5; hop++) {
+        if (uri.scheme != 'https' && uri.scheme != 'http') throw const FormatException('нужна ссылка http(s)');
+        await _guardHost(uri.host, resolve: !viaTunnel || tunnel == null);
+        final req = await client.getUrl(uri);
+        req.followRedirects = false;
+        if (uri.host.toLowerCase() == origin) headers.forEach(req.headers.set);
+        final resp = await req.close();
+        if (resp.isRedirect || const {301, 302, 303, 307, 308}.contains(resp.statusCode)) {
+          final loc = resp.headers.value(HttpHeaders.locationHeader);
+          await resp.drain<void>();
+          if (loc == null) throw const HttpException('перенаправление без адреса');
+          final next = uri.resolve(loc);
+          if (uri.scheme == 'https' && next.scheme != 'https') {
+            throw const HttpException('подписка перенаправляет с https на http');
+          }
+          uri = next;
+          continue;
+        }
+        final out = <String, String>{};
+        resp.headers.forEach((k, v) => out[k.toLowerCase()] = v.join(', '));
+        final bytes = BytesBuilder(copy: false);
+        await for (final chunk in resp) {
+          bytes.add(chunk);
+          if (bytes.length > maxBytes) throw const HttpException('ответ больше 8 МБ');
+        }
+        return HttpResult(resp.statusCode, utf8.decode(bytes.takeBytes(), allowMalformed: true), out);
       }
-      return HttpResult(resp.statusCode, utf8.decode(bytes.takeBytes(), allowMalformed: true), headers);
+      throw const HttpException('слишком много перенаправлений');
     }
 
     try {
@@ -94,13 +129,35 @@ class Net {
     }
   }
 
+  /// Адреса самого телефона запрещены и в ссылке, и после DNS (защита от DNS rebinding).
+  static Future<void> _guardHost(String host, {required bool resolve}) async {
+    if (_isLocal(host)) throw const FormatException('адрес указывает на сам телефон');
+    if (!resolve || InternetAddress.tryParse(host) != null) return;
+    try {
+      final addrs = await InternetAddress.lookup(host).timeout(const Duration(seconds: 8));
+      if (addrs.any((a) => a.isLoopback || a.isLinkLocal || _isAny(a))) {
+        throw const FormatException('адрес указывает на сам телефон');
+      }
+    } on SocketException {
+      // Не нашли адрес — пусть ошибку покажет само подключение.
+    } on TimeoutException {
+      // То же.
+    }
+  }
+
+  static bool _isAny(InternetAddress a) => a.rawAddress.every((b) => b == 0);
+
   /// Пробуем зеркала и маршруты по очереди, первый удачный ответ 200.
-  static Future<HttpResult> getAny(List<String> urls, {Duration timeout = const Duration(seconds: 25)}) async {
+  static Future<HttpResult> getAny(
+    List<String> urls, {
+    Duration timeout = const Duration(seconds: 25),
+    Map<String, String> headers = const {},
+  }) async {
     Object? last;
     for (final via in routes) {
       for (final url in urls) {
         try {
-          final r = await get(url, viaTunnel: via, timeout: timeout);
+          final r = await get(url, viaTunnel: via, timeout: timeout, headers: headers);
           if (r.status == 200) return r;
           last = 'HTTP ${r.status}';
         } catch (e) {
@@ -143,7 +200,7 @@ class Net {
     final h = host.toLowerCase();
     if (h == 'localhost' || h.endsWith('.localhost')) return true;
     final ip = InternetAddress.tryParse(h);
-    return ip != null && (ip.isLoopback || ip.isLinkLocal);
+    return ip != null && (ip.isLoopback || ip.isLinkLocal || _isAny(ip));
   }
 
   static String _humanError(Object? e) {
@@ -337,6 +394,112 @@ class Net {
       );
     }
     return IpInfo(ip: ip, source: 'cloudflare');
+  }
+
+  /// Проверка пути через узел (поднятый пробный экземпляр ядра [p]), как у Галса в Фарватере:
+  /// 1) скачать больше 16 КБ — при белых списках оператор часто пропускает начало и рвёт потом;
+  /// 2) открыть Telegram — узлы с выходом в России его не пропускают;
+  /// 3) DNS через узел — первый ответивший из [dns] (null — не проверять).
+  static Future<PathCheck> checkPath(LocalProxy p, {List<String>? dns}) async {
+    const urls = [
+      'https://speed.cloudflare.com/__down?bytes=262144',
+      'https://proof.ovh.net/files/1Mb.dat',
+    ];
+    const enough = 200 * 1024;
+    var speed = 0;
+    for (final url in urls) {
+      final sw = Stopwatch()..start();
+      final got = await _fetchBytes(p, url, 256 * 1024);
+      if (got >= enough) {
+        speed = got * 1000 ~/ max(1, sw.elapsedMilliseconds);
+        break;
+      }
+    }
+    if (speed == 0) return const PathCheck();
+    if (!await _answers(p, 'https://api.telegram.org/')) return PathCheck(data: true, speed: speed);
+    if (dns == null) return PathCheck(data: true, telegram: true, speed: speed);
+    for (final server in dns) {
+      if (await dohAnswers(p, server)) return PathCheck(data: true, telegram: true, dns: server, speed: speed);
+    }
+    return PathCheck(data: true, telegram: true, speed: speed);
+  }
+
+  static Future<int> _fetchBytes(LocalProxy p, String url, int limit) async {
+    final c = _proxied(p);
+    var total = 0;
+    try {
+      final req = await c.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 8));
+      final resp = await req.close().timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return 0;
+      await for (final chunk in resp.timeout(const Duration(seconds: 5))) {
+        total += chunk.length;
+        if (total >= limit) break;
+      }
+    } catch (_) {
+      // сколько успели
+    } finally {
+      c.close(force: true);
+    }
+    return total;
+  }
+
+  static Future<bool> _answers(LocalProxy p, String url) async {
+    final c = _proxied(p);
+    try {
+      final req = await c.headUrl(Uri.parse(url)).timeout(const Duration(seconds: 8));
+      req.followRedirects = false;
+      final resp = await req.close().timeout(const Duration(seconds: 8));
+      await resp.drain<void>();
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      c.close(force: true);
+    }
+  }
+
+  /// DNS-over-HTTPS через узел: запрос telegram.org, ждём ответ с записями.
+  static Future<bool> dohAnswers(LocalProxy p, String server) async {
+    final ip = dnsServers[server];
+    if (ip == null) return false;
+    final c = _proxied(p, timeout: const Duration(seconds: 4));
+    try {
+      final q = base64Url.encode(dnsWire('telegram.org')).replaceAll('=', '');
+      final req = await c.getUrl(Uri.parse('https://$ip/dns-query?dns=$q')).timeout(const Duration(seconds: 5));
+      req.followRedirects = false;
+      req.headers.set(HttpHeaders.acceptHeader, 'application/dns-message');
+      final resp = await req.close().timeout(const Duration(seconds: 5));
+      final bytes = BytesBuilder(copy: false);
+      await for (final chunk in resp.timeout(const Duration(seconds: 5))) {
+        bytes.add(chunk);
+        if (bytes.length > 4096) break;
+      }
+      return resp.statusCode == 200 && dnsAnswered(bytes.takeBytes());
+    } catch (_) {
+      return false;
+    } finally {
+      c.close(force: true);
+    }
+  }
+
+  static Uint8List dnsWire(String name) {
+    final out = BytesBuilder()..add(const [0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+    for (final label in name.split('.').where((l) => l.isNotEmpty)) {
+      final b = ascii.encode(label);
+      out
+        ..addByte(b.length)
+        ..add(b);
+    }
+    out.add(const [0, 0, 1, 0, 1]);
+    return out.takeBytes();
+  }
+
+  static bool dnsAnswered(List<int> b) {
+    if (b.length < 12) return false;
+    final reply = b[2] & 0x80 != 0;
+    final ok = b[3] & 0x0F == 0;
+    final count = (b[6] << 8) | b[7];
+    return reply && ok && count > 0;
   }
 
   /// Скорость скачивания, байт/с: через [proxy] (пробный экземпляр ядра) или через туннель.

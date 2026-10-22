@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -20,7 +22,6 @@ class LocmanVpnService : VpnService() {
         const val ACTION_STOP = "app.locman.action.STOP"
         private const val CHANNEL = "vpn"
         private const val NOTIFICATION_ID = 7
-        private const val PROBE_URL = "https://www.gstatic.com/generate_204"
         private const val PROBE_URL_2 = "https://cp.cloudflare.com/generate_204"
 
         fun start(ctx: Context, spec: StartSpec) {
@@ -53,6 +54,7 @@ class LocmanVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
+        VpnBus.app = applicationContext
         XrayEngine.init(this)
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Подключение", NotificationManager.IMPORTANCE_LOW))
@@ -119,7 +121,31 @@ class LocmanVpnService : VpnService() {
         StartSpec.setWasOn(this, true)
         update(spec.name, "Подключено")
         startMonitor(spec.name, xrayTun)
-        startWatchdog(spec.nodeId)
+        startWatchdog(spec.nodeId, spec.testUrl)
+        watchNetwork()
+    }
+
+    private var netCallback: ConnectivityManager.NetworkCallback? = null
+
+    /** Следим за сменой сети: при переходе Wi-Fi ↔ мобильная режим сети может смениться. */
+    private fun watchNetwork() {
+        if (netCallback != null) return
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return
+        var current: Network? = null
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                val before = current
+                current = network
+                if (before != null && before != network) VpnBus.network()
+            }
+        }
+        if (runCatching { cm.registerDefaultNetworkCallback(cb) }.isSuccess) netCallback = cb
+    }
+
+    private fun unwatchNetwork() {
+        val cb = netCallback ?: return
+        netCallback = null
+        runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) }
     }
 
     /**
@@ -127,7 +153,7 @@ class LocmanVpnService : VpnService() {
      * Два провала подряд — проверяем запасные узлы и переключаемся на первый живой.
      * Работает без открытого приложения.
      */
-    private fun startWatchdog(nodeId: String) {
+    private fun startWatchdog(nodeId: String, testUrl: String) {
         watchdog?.cancel(false)
         val gen = ++watchGen
         var fails = 0
@@ -139,7 +165,7 @@ class LocmanVpnService : VpnService() {
             tick++
             val screenOn = runCatching { power.isInteractive }.getOrDefault(true)
             if (!screenOn && tick % 3 != 0) return@scheduleWithFixedDelay
-            val ok = XrayEngine.measureCurrent(PROBE_URL) > 0 || XrayEngine.measureCurrent(PROBE_URL_2) > 0
+            val ok = XrayEngine.measureCurrent(testUrl) > 0 || XrayEngine.measureCurrent(PROBE_URL_2) > 0
             if (gen != watchGen) return@scheduleWithFixedDelay
             if (ok) {
                 if (fails > 0 || stalledSince > 0) VpnBus.watch("alive", nodeId = nodeId)
@@ -168,7 +194,7 @@ class LocmanVpnService : VpnService() {
         update(spec.name, "Узел не отвечает — проверяю запасные")
         val pool = Executors.newFixedThreadPool(5)
         val results = try {
-            candidates.map { b -> b to pool.submit<Long> { XrayEngine.measureDelay(b.test, PROBE_URL) } }
+            candidates.map { b -> b to pool.submit<Long> { XrayEngine.measureDelay(b.test, spec.testUrl) } }
                 .map { (b, f) -> b to runCatching { f.get(15, TimeUnit.SECONDS) }.getOrDefault(-1L) }
         } finally {
             pool.shutdownNow()
@@ -190,11 +216,26 @@ class LocmanVpnService : VpnService() {
         var tick = 0
         var sumUp = 0L
         var sumDown = 0L
+        val power = getSystemService(android.os.PowerManager::class.java)
+        var asleep = false
         monitor = worker.scheduleWithFixedDelay({
+            // При выключенном экране не считаем и не перерисовываем — бережём батарею.
+            // Счётчики ядра копятся и догонят при включении.
+            if (!runCatching { power.isInteractive }.getOrDefault(true)) {
+                asleep = true
+                return@scheduleWithFixedDelay
+            }
+            val woke = asleep
+            asleep = false
             if (xrayTun) {
-                val (up, down) = XrayEngine.trafficDelta()
+                var (up, down) = XrayEngine.trafficDelta()
                 sumUp += up
                 sumDown += down
+                if (woke) {
+                    // Накопленное за время сна — в итоги, но не в скорость.
+                    up = 0L
+                    down = 0L
+                }
                 VpnBus.traffic(up, down, sumUp, sumDown)
                 if (tick++ % 5 == 0) update(name, "↓ ${rate(down)}   ↑ ${rate(up)}   за сеанс ${bytes(sumUp + sumDown)}")
                 return@scheduleWithFixedDelay
@@ -203,8 +244,8 @@ class LocmanVpnService : VpnService() {
             val b = base ?: longArrayOf(s[1], s[3]).also { base = it }
             val upTotal = (s[1] - b[0]).coerceAtLeast(0)
             val downTotal = (s[3] - b[1]).coerceAtLeast(0)
-            val up = if (lastUp < 0) 0 else (s[1] - lastUp).coerceAtLeast(0)
-            val down = if (lastDown < 0) 0 else (s[3] - lastDown).coerceAtLeast(0)
+            val up = if (lastUp < 0 || woke) 0 else (s[1] - lastUp).coerceAtLeast(0)
+            val down = if (lastDown < 0 || woke) 0 else (s[3] - lastDown).coerceAtLeast(0)
             lastUp = s[1]
             lastDown = s[3]
             VpnBus.traffic(up, down, upTotal, downTotal)
@@ -218,6 +259,7 @@ class LocmanVpnService : VpnService() {
         watchdog = null
         monitor?.cancel(false)
         monitor = null
+        if (closeTun) unwatchNetwork()
         TunBridge.stop()
         XrayEngine.stop()
         if (closeTun) {
