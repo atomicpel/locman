@@ -217,6 +217,18 @@ class MainActivity : FlutterActivity() {
                 result.success(link)
             }
 
+            "otherVpn" -> {
+                // Наш туннель поднят — значит, это не чужой VPN.
+                val ours = VpnBus.state is VpnState.Connected || VpnBus.state is VpnState.Connecting
+                val cm = getSystemService(android.net.ConnectivityManager::class.java)
+                val vpn = runCatching {
+                    cm.allNetworks.any { n ->
+                        cm.getNetworkCapabilities(n)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
+                    }
+                }.getOrDefault(false)
+                result.success(vpn && !ours)
+            }
+
             "battery" -> {
                 val bm = getSystemService(android.os.BatteryManager::class.java)
                 val level = runCatching { bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) }.getOrDefault(-1)

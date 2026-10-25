@@ -475,6 +475,14 @@ class _SafePage extends StatelessWidget {
           options: [for (final e in dnsMeta.entries) (e.key, e.value)],
         ),
         const SizedBox(height: 16),
+        SettingRow(
+          title: 'Отправлять HWID своим подпискам',
+          line: 'Платные панели с лимитом устройств (Remnawave, Marzban) по случайному номеру устройства, '
+              'версии Android и модели телефона считают, сколько устройств пользуется подпиской. '
+              'Публичные подписки из каталога этих данных не получают.',
+          control: PillSwitch(on: s.sendHwid, onChanged: s.setSendHwid),
+        ),
+        const SizedBox(height: 16),
         const SettingRow(
           title: 'Локальный прокси под паролем',
           line: 'Входы ядра Xray слушают только 127.0.0.1 и закрыты одноразовым паролем — другие приложения ими не воспользуются.',
@@ -551,6 +559,13 @@ class _ProbePage extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         SettingRow(
+          title: 'Группа «Не отвечают»',
+          line: 'Узлы, не ответившие на двух проверках подряд, собираются внизу в свёрнутую группу. '
+              'Выключите — они останутся в своих подписках. В поиск они не попадают в любом случае.',
+          control: PillSwitch(on: s.deadGroup, onChanged: s.setDeadGroup),
+        ),
+        const SizedBox(height: 16),
+        SettingRow(
           title: 'Скрывать дубли',
           line: 'Один и тот же сервер из разных подписок — одна строка.',
           control: PillSwitch(on: s.hideDupes, onChanged: s.setHideDupes),
@@ -617,7 +632,18 @@ class _AboutPage extends StatelessWidget {
           Text('Обновления: ${s.updateError}', style: p.text(13, color: p.danger)),
         ],
         const SizedBox(height: 12),
+        SettingRow(
+          title: 'Проверять обновления автоматически',
+          line: 'При запуске и раз в 15 минут, пока «Лоцман» открыт, — небольшой файл с GitHub или jsDelivr. '
+              'Само обновление скачивается, только когда вы нажмёте «Скачать и установить».',
+          control: PillSwitch(on: s.autoUpdateCheck, onChanged: s.setAutoUpdateCheck),
+        ),
+        const SizedBox(height: 12),
         PillButton(label: 'История изменений', onTap: s.openChangelog),
+        const SizedBox(height: 12),
+        PillButton(label: 'Условия использования', onTap: () => s.openLegal('terms')),
+        const SizedBox(height: 12),
+        PillButton(label: 'Политика конфиденциальности', onTap: () => s.openLegal('privacy')),
         const SizedBox(height: 12),
         PillButton(label: 'Страница проекта', onTap: () => Native.openUrl('https://github.com/$repo')),
         const SizedBox(height: 24),

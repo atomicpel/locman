@@ -5,7 +5,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ABIS="${ABIS:-arm64-v8a}"
-XRAY_LIB_VERSION="${XRAY_LIB_VERSION:-v26.10.10}"
+XRAY_LIB_VERSION="${XRAY_LIB_VERSION:-v26.10.21}"
 HEV_VERSION="${HEV_VERSION:-2.18.0}"
 
 echo "Ядро Xray ($XRAY_LIB_VERSION)"

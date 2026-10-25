@@ -170,6 +170,15 @@ class Native {
     }
   }
 
+  /// Включён ли сейчас чужой VPN (не «Лоцман»).
+  static Future<bool> otherVpn() async {
+    try {
+      return (await _core.invokeMethod<bool>('otherVpn')) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Заряд батареи: (процент или -1, заряжается ли).
   static Future<(int, bool)> battery() async {
     try {

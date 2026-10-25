@@ -83,6 +83,7 @@ class XrayConfig {
     bool xrayTun = false,
     int mtu = 1500,
     NodeProfile? profile,
+    bool udp = true,
   }) {
     final provider = node.isJson ? jsonDecode(node.raw) as Map<String, dynamic> : null;
     final frag = (profile?.frag ?? fragment) && node.canFragment;
@@ -126,7 +127,7 @@ class XrayConfig {
             'accounts': [
               {'user': local.user, 'pass': local.pass},
             ],
-            'udp': true,
+            'udp': udp,
           },
           'sniffing': {
             'enabled': true,

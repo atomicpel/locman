@@ -180,6 +180,18 @@ class AppState extends ChangeNotifier {
 
   /// Последняя версия, для которой показали «Что нового».
   String? seenVersion;
+
+  /// Проверять новые версии сами (раз в 15 минут, пока приложение открыто, и при запуске).
+  bool autoUpdateCheck = true;
+
+  /// Отправлять HWID и модель телефона своим подпискам (нужно панелям с лимитом устройств).
+  bool sendHwid = true;
+
+  /// Собирать узлы без ответа в отдельную группу «Не отвечают».
+  bool deadGroup = true;
+
+  /// Принятая редакция условий и политики (0 — ещё не принимали).
+  int legalAccepted = 0;
   Set<String> noFrag = {};
   String? pinnedId;
   String? lastNodeId;
@@ -295,7 +307,12 @@ class AppState extends ChangeNotifier {
     if (info?.smoke == true) {
       unawaited(_smoke());
     } else if (onboarded && autoConnect && phase == Phase.off) {
-      unawaited(connect());
+      // Чужой VPN уже включён — не перебиваем его.
+      if (await Native.otherVpn()) {
+        log('Другой VPN уже включён — автоподключение пропущено');
+      } else {
+        unawaited(connect());
+      }
     }
   }
 
@@ -405,7 +422,7 @@ class AppState extends ChangeNotifier {
     await refreshDue();
     // При низком заряде фоновую проверку обновлений откладываем.
     final (level, charging) = await Native.battery();
-    if (charging || level < 0 || level > 20) await checkUpdate(quiet: true);
+    if (autoUpdateCheck && (charging || level < 0 || level > 20)) await checkUpdate(quiet: true);
   }
 
   void onResume() {
@@ -456,6 +473,10 @@ class AppState extends ChangeNotifier {
     testKey = testUrls.containsKey(j['testKey']) ? j['testKey'] as String : 'google';
     hwid = (j['hwid'] as String?) ?? '';
     seenVersion = j['seenVersion'] as String?;
+    autoUpdateCheck = j['autoUpdateCheck'] != false;
+    sendHwid = j['sendHwid'] != false;
+    deadGroup = j['deadGroup'] != false;
+    legalAccepted = (j['legalAccepted'] as num?)?.toInt() ?? 0;
     banned = ((j['banned'] as List?) ?? const []).map((e) => e.toString()).toSet();
     noFrag = ((j['noFrag'] as List?) ?? const []).map((e) => e.toString()).toSet();
     pinnedId = j['pinnedId'] as String?;
@@ -505,6 +526,10 @@ class AppState extends ChangeNotifier {
         'testKey': testKey,
         'hwid': hwid,
         'seenVersion': seenVersion,
+        'autoUpdateCheck': autoUpdateCheck,
+        'sendHwid': sendHwid,
+        'deadGroup': deadGroup,
+        'legalAccepted': legalAccepted,
         'banned': banned.toList(),
         'noFrag': noFrag.take(800).toList(),
         'pinnedId': pinnedId,
@@ -579,6 +604,45 @@ class AppState extends ChangeNotifier {
     _set(() => dns = d);
     log('DNS: ${dnsMeta[d]}');
     _reapply();
+  }
+
+  void setAutoUpdateCheck(bool v) => _set(() => autoUpdateCheck = v);
+  void setSendHwid(bool v) => _set(() => sendHwid = v);
+  void setDeadGroup(bool v) => _set(() => deadGroup = v);
+
+  // ---------- Условия и политика ----------
+
+  /// Номер текущей редакции условий использования и политики конфиденциальности.
+  static const legalRevision = 1;
+
+  bool get needsLegal => legalAccepted < legalRevision;
+
+  /// Открытый документ: 'terms' или 'privacy'.
+  String? legalOpen;
+  final Map<String, String> _legalText = {};
+
+  String legalText(String doc) => _legalText[doc] ?? '';
+
+  Future<void> openLegal(String doc) async {
+    if (!_legalText.containsKey(doc)) {
+      try {
+        _legalText[doc] = await rootBundle.loadString('assets/legal/$doc.md');
+      } catch (_) {
+        _legalText[doc] = 'Документ не открылся. Он есть на странице проекта: github.com/$repo/tree/main/assets/legal';
+      }
+    }
+    legalOpen = doc;
+    notifyListeners();
+  }
+
+  void closeLegal() {
+    legalOpen = null;
+    notifyListeners();
+  }
+
+  void acceptLegal() {
+    _set(() => legalAccepted = legalRevision);
+    log('Приняты условия и политика, редакция $legalRevision');
   }
 
   void setSameCountry(bool v) {
@@ -819,7 +883,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     final info = sourceInfo.putIfAbsent(s.id, SourceInfo.new);
     try {
-      final r = await Net.getAny(s.mirrors, headers: s.isMine ? _deviceHeaders : const {});
+      final r = await Net.getAny(s.mirrors, headers: s.isMine && sendHwid ? _deviceHeaders : const {});
       final body = r.body;
       final parsed = await compute(_parseOneSync, (body, s.id, r.headers));
       if (parsed.nodes.isEmpty) {
@@ -1307,7 +1371,7 @@ class AppState extends ChangeNotifier {
       pass: Net.token(24),
     );
     final config = XrayConfig.build(n,
-        local: local, directRu: false, dns: dns, fragment: _fragFor(n), profile: variant, encryptedDns: false);
+        local: local, directRu: false, dns: dns, fragment: _fragFor(n), profile: variant, encryptedDns: false, udp: false);
     int? id;
     try {
       id = await Native.probeStart(config);
@@ -1331,8 +1395,36 @@ class AppState extends ChangeNotifier {
     flash(delay > 0 ? '${n.title} · $delay мс' : 'Нет ответа');
   }
 
+  int _checkGen = 0;
+
+  /// Остановить проверку всех узлов (кнопка «Остановить» и большая кнопка во время проверки).
+  void stopCheck() {
+    if (checkingAll == 0) return;
+    _checkGen++;
+    checkingAll = 0;
+    checkingDone = 0;
+    log('Проверка остановлена');
+    notifyListeners();
+  }
+
+  /// Пока VPN включён, узлы своей подписки, через которую он поднят, не считаем мёртвыми
+  /// по одной неудачной проверке: платные подписки часто не пускают второе подключение.
+  bool _sameSubAsActive(ProxyNode n) {
+    if (phase != Phase.on) return false;
+    final a = nodeById(activeId);
+    if (a == null || a.sourceId != n.sourceId) return false;
+    return sourceById(n.sourceId)?.isMine == true;
+  }
+
+  void _recordCheck(ProxyNode n, int delay, {required bool real}) {
+    if (delay < 0 && _sameSubAsActive(n)) return;
+    _record(n.id, delay, real: real);
+  }
+
   Future<void> checkAll() async {
     if (checkingAll > 0) return;
+    final gen = ++_checkGen;
+    bool stopped() => gen != _checkGen;
     // На вкладке Reality/XHTTP проверяем только их — так в разы быстрее.
     final list = visibleNodes().where((n) {
       if (filter == 'reality') return n.isReality;
@@ -1351,21 +1443,40 @@ class AppState extends ChangeNotifier {
     final tcpCache = <String, Future<int>>{};
     final real = _Gate(probeMeta[probe]!.$2);
     await _pool(list, _tcpParallel, (n) async {
+      if (stopped()) return;
+      // Узел, к которому подключены, проверяем через сам туннель — второе подключение
+      // к нему могло бы дать ложное «нет ответа».
+      if (phase == Phase.on && n.id == activeId) {
+        final sw = Stopwatch()..start();
+        final ok = await Net.probeTunnel();
+        if (stopped()) return;
+        _record(n.id, ok ? max(1, sw.elapsedMilliseconds) : -1, real: true);
+        checkingDone++;
+        _throttledNotify();
+        return;
+      }
       if (!n.coreOnly) {
         final key = '${n.address.toLowerCase()}:${n.port}';
         final tcp = await (tcpCache[key] ??= Net.tcping(n.address, n.port, timeout: const Duration(milliseconds: 1500)));
+        if (stopped()) return;
         if (tcp < 0) {
-          _record(n.id, -1, real: false);
+          _recordCheck(n, -1, real: false);
           checkingDone++;
           _throttledNotify();
           return;
         }
       }
+      if (stopped()) return;
       final d = await _measure(n, _testConfig(n, frag: _fragFor(n)), gate: real);
-      _record(n.id, d, real: true);
+      if (stopped()) return;
+      _recordCheck(n, d, real: true);
       checkingDone++;
       _throttledNotify();
     });
+    if (stopped()) {
+      unawaited(_saveHealth());
+      return;
+    }
     checkingAll = 0;
     unawaited(_saveHealth());
     final alive = list.where((n) => latencyOf(n.id) > 0).length;
@@ -1405,6 +1516,11 @@ class AppState extends ChangeNotifier {
   // =====================================================================
 
   void togglePower() {
+    // Во время проверки узлов большая кнопка останавливает проверку, а не VPN.
+    if (checkingAll > 0) {
+      stopCheck();
+      return;
+    }
     if (phase == Phase.on || phase == Phase.seek) {
       unawaited(disconnect());
     } else {
@@ -1449,10 +1565,10 @@ class AppState extends ChangeNotifier {
     await _pool(cands, 32, (n) async {
       if (stale()) return;
       if (!n.coreOnly && await Net.tcping(n.address, n.port, timeout: const Duration(milliseconds: 1500)) < 0) {
-        _record(n.id, -1, real: false);
+        _recordCheck(n, -1, real: false);
       } else {
         final d = stale() ? 0 : await _realTest(n, gate: gate);
-        if (d != 0) _record(n.id, d, real: true);
+        if (d != 0) _recordCheck(n, d, real: true);
         if (d > 0) delays[n] = d;
       }
       checked++;
@@ -1503,7 +1619,8 @@ class AppState extends ChangeNotifier {
       user: Net.token(12),
       pass: Net.token(24),
     );
-    final config = XrayConfig.build(n, local: local, directRu: false, dns: dns, fragment: _fragFor(n), profile: profiles[n.id]);
+    final config = XrayConfig.build(n,
+        local: local, directRu: false, dns: dns, fragment: _fragFor(n), profile: profiles[n.id], udp: false);
     int? id;
     try {
       id = await Native.probeStart(config);
@@ -1817,7 +1934,12 @@ class AppState extends ChangeNotifier {
     final list = _candidates(_kindForMode())
         .where((n) => n.id != current.id && latencyOf(n.id) > 0 && (country == null || n.place.code == country))
         .toList()
-      ..sort((a, b) => latencyOf(a.id).compareTo(latencyOf(b.id)));
+      // Сначала из той же подписки (там обычно те же условия), потом остальные — по задержке.
+      ..sort((a, b) {
+        final sa = a.sourceId == current.sourceId ? 0 : 1;
+        final sb = b.sourceId == current.sourceId ? 0 : 1;
+        return sa != sb ? sa.compareTo(sb) : latencyOf(a.id).compareTo(latencyOf(b.id));
+      });
     return [
       for (final n in list.take(10))
         {

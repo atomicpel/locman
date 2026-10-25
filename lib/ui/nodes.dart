@@ -46,8 +46,9 @@ class _NodesScreenState extends State<NodesScreen> {
       if (q.isEmpty) return true;
       return '${n.name} ${n.title} ${n.place.code ?? ''} ${n.protocol.title} ${n.transportLabel}'.toLowerCase().contains(q);
     }).toList();
-    final dead = list.where((n) => s.isDead(n.id)).toList()..sort((a, b) => _byLatency(s, a, b));
-    final alive = list.where((n) => !s.isDead(n.id)).toList();
+    bool deadHere(ProxyNode n) => s.deadGroup && s.isDead(n.id);
+    final dead = list.where(deadHere).toList()..sort((a, b) => _byLatency(s, a, b));
+    final alive = list.where((n) => !deadHere(n)).toList();
 
     final items = <Widget>[];
     for (final src in s.allSources) {
@@ -92,7 +93,15 @@ class _NodesScreenState extends State<NodesScreen> {
             ],
             if (s.checkingAll > 0) ...[
               const SizedBox(height: 12),
-              Text('Проверяем: ${s.checkingDone} из ${s.checkingAll}', style: p.text(13, color: p.muted)),
+              Row(
+                children: [
+                  Expanded(child: Text('Проверяем: ${s.checkingDone} из ${s.checkingAll}', style: p.text(13, color: p.muted))),
+                  TextButton(
+                    onPressed: s.stopCheck,
+                    child: Text('Остановить', style: p.text(13, weight: FontWeight.w600, color: p.accent)),
+                  ),
+                ],
+              ),
               const SizedBox(height: 6),
               LinearProgressIndicator(
                 value: s.checkingAll == 0 ? null : s.checkingDone / s.checkingAll,

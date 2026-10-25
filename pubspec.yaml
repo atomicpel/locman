@@ -19,6 +19,7 @@ flutter:
   assets:
     - assets/catalog.json
     - assets/changelog.json
+    - assets/legal/
   fonts:
     - family: Manrope
       fonts:

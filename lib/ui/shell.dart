@@ -78,9 +78,13 @@ class _LocmanAppState extends State<LocmanApp> with WidgetsBindingObserver {
               value: overlay,
               child: !s.ready
                   ? const _Splash()
-                  : s.onboarded
-                      ? _Shell(s: s)
-                      : _Onboarding(s: s),
+                  : s.legalOpen != null && (s.needsLegal || !s.onboarded)
+                      ? LegalPage(s: s)
+                      : s.needsLegal
+                          ? _LegalGate(s: s)
+                          : s.onboarded
+                              ? _Shell(s: s)
+                              : _Onboarding(s: s),
             ),
             builder: (context, child) => PaletteScope(palette: p, child: child!),
           ),
@@ -127,10 +131,17 @@ class _Shell extends StatelessWidget {
       AppTab.more => MoreScreen(s: s),
     };
     return PopScope(
-      canPop: s.tab == AppTab.home && s.settingsPage == null && s.pendingImport == null && !s.whatsNew && !s.changelogOpen,
+      canPop: s.tab == AppTab.home &&
+          s.settingsPage == null &&
+          s.pendingImport == null &&
+          !s.whatsNew &&
+          !s.changelogOpen &&
+          s.legalOpen == null,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (s.pendingImport != null) {
+        if (s.legalOpen != null) {
+          s.closeLegal();
+        } else if (s.pendingImport != null) {
           s.dismissImport();
         } else if (s.whatsNew || s.changelogOpen) {
           s.closeWhatsNew();
@@ -179,6 +190,7 @@ class _Shell extends StatelessWidget {
               ),
             if (s.pendingImport != null) _ImportCard(s: s),
             if (s.whatsNew || s.changelogOpen) _Changelog(s: s, all: s.changelogOpen),
+            if (s.legalOpen != null) Positioned.fill(child: LegalPage(s: s)),
           ],
         ),
         bottomNavigationBar: _TabBar(s: s),
@@ -242,7 +254,11 @@ class _Header extends StatelessWidget {
               onTap: s.refreshAll,
             ),
           if (s.tab == AppTab.nodes)
-            RoundIconButton(icon: Icons.speed_rounded, label: 'Проверить все', busy: s.checkingAll > 0, onTap: s.checkAll),
+            RoundIconButton(
+              icon: s.checkingAll > 0 ? Icons.stop_rounded : Icons.speed_rounded,
+              label: s.checkingAll > 0 ? 'Остановить проверку' : 'Проверить все',
+              onTap: s.checkingAll > 0 ? s.stopCheck : s.checkAll,
+            ),
         ],
       ),
     );
@@ -493,3 +509,158 @@ class _Onboarding extends StatelessWidget {
     );
   }
 }
+
+/// Первый запуск (или новая редакция): принять условия и политику.
+class _LegalGate extends StatelessWidget {
+  const _LegalGate({required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    final again = s.legalAccepted > 0;
+    return Scaffold(
+      backgroundColor: p.bg,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Icon(Icons.explore_outlined, size: 32, color: p.accent),
+              const SizedBox(height: 16),
+              Text(again ? 'Условия обновились' : 'Перед началом', style: p.text(26, weight: FontWeight.w600, display: true)),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView(
+                  children: [
+                    for (final line in const [
+                      '«Лоцман» бесплатный, с открытым кодом. Своих серверов у автора нет, '
+                          'доступ к серверам он не продаёт.',
+                      'Серверы в подписках принадлежат чужим людям. Их владелец видит, к каким сайтам вы ходите, '
+                          'поэтому пароли и данные карт через непроверенные серверы лучше не передавать.',
+                      'Автору приложение ничего не отправляет: нет регистрации, аналитики и рекламы. '
+                          'Всё хранится на телефоне.',
+                      'Соблюдать законы своей страны и правила сервисов — ваша обязанность.',
+                      'Приложение даётся «как есть», без гарантий, что оно будет работать в вашей сети.',
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Icon(Icons.check_rounded, size: 16, color: p.accent),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(line, style: p.text(15))),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Text('Подробно — в документах ниже.', style: p.text(14, color: p.muted)),
+                  ],
+                ),
+              ),
+              PillButton(label: 'Условия использования', icon: Icons.description_outlined, onTap: () => s.openLegal('terms')),
+              const SizedBox(height: 8),
+              PillButton(label: 'Политика конфиденциальности', icon: Icons.shield_outlined, onTap: () => s.openLegal('privacy')),
+              const SizedBox(height: 16),
+              PillButton(label: 'Принимаю', primary: true, onTap: s.acceptLegal),
+              const SizedBox(height: 8),
+              Text(
+                'Нажимая «Принимаю», вы соглашаетесь с условиями использования и политикой конфиденциальности.',
+                textAlign: TextAlign.center,
+                style: p.text(12, color: p.muted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Документ (условия или политика): простой Markdown — заголовки #, ##, пункты «- », абзацы.
+class LegalPage extends StatelessWidget {
+  const LegalPage({super.key, required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    final doc = s.legalOpen ?? 'terms';
+    final title = doc == 'terms' ? 'Условия использования' : 'Политика конфиденциальности';
+    final blocks = <Widget>[];
+    final para = StringBuffer();
+    void flush() {
+      if (para.isEmpty) return;
+      blocks.add(Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Text(para.toString().trim(), style: p.text(15)),
+      ));
+      para.clear();
+    }
+
+    for (final raw in s.legalText(doc).split('\n')) {
+      final line = raw.trimRight();
+      if (line.startsWith('# ')) {
+        flush();
+        blocks.add(Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(line.substring(2), style: p.text(24, weight: FontWeight.w600, display: true)),
+        ));
+      } else if (line.startsWith('## ')) {
+        flush();
+        blocks.add(Padding(
+          padding: const EdgeInsets.only(top: 12, bottom: 8),
+          child: Text(line.substring(3), style: p.text(18, weight: FontWeight.w600)),
+        ));
+      } else if (line.startsWith('- ')) {
+        flush();
+        blocks.add(Padding(
+          padding: const EdgeInsets.only(bottom: 6, left: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('•  ', style: p.text(15, color: p.accent)),
+              Expanded(child: Text(line.substring(2), style: p.text(15))),
+            ],
+          ),
+        ));
+      } else if (line.trim().isEmpty) {
+        flush();
+      } else {
+        para.write('$line ');
+      }
+    }
+    flush();
+    return Material(
+      color: p.bg,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  RoundIconButton(icon: Icons.arrow_back_rounded, label: 'Назад', onTap: s.closeLegal),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(title,
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: p.text(18, weight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: blocks),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

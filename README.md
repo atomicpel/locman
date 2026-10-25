@@ -28,6 +28,10 @@ Kotlin (android/app/…)    VpnService → TUN → hev-socks5-tunnel → SOCKS5 
 ([AndroidLibXrayLite](https://github.com/2dust/AndroidLibXrayLite)) и [hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel).
 Релиз — ветка `release/vX.Y.Z` (или тег `vX.Y.Z`): CI подпишет APK, создаст тег, релиз и `update.json`.
 
+## Условия и данные
+
+[Условия использования](assets/legal/terms.md) и [политика конфиденциальности](assets/legal/privacy.md) — те же тексты, что открываются в приложении («Ещё → О клиенте»).
+
 ## Благодарности и лицензия
 
 Схема движка, разборщик ссылок и каталог основаны на [Farvater](https://github.com/farvater-app/farvater) (GPL-3.0),
