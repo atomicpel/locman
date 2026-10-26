@@ -951,7 +951,8 @@ class AppState extends ChangeNotifier {
           final lines = unpackShare(parts.take(k).join());
           if (lines != null && lines.isNotEmpty) {
             expanded.addAll(lines);
-            return ' ${parts.skip(k).join(' ')} ';
+            // Остаток вернуть вплотную к тексту за совпадением: «https» + «://…».
+            return ' ${parts.skip(k).join(' ')}';
           }
         }
         return m.group(0)!;
