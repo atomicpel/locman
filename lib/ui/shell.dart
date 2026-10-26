@@ -136,11 +136,14 @@ class _Shell extends StatelessWidget {
           s.pendingImport == null &&
           !s.whatsNew &&
           !s.changelogOpen &&
-          s.legalOpen == null,
+          s.legalOpen == null &&
+          !s.adminAsk,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (s.legalOpen != null) {
           s.closeLegal();
+        } else if (s.adminAsk) {
+          s.dismissAdmin();
         } else if (s.pendingImport != null) {
           s.dismissImport();
         } else if (s.whatsNew || s.changelogOpen) {
@@ -190,6 +193,7 @@ class _Shell extends StatelessWidget {
               ),
             if (s.pendingImport != null) _ImportCard(s: s),
             if (s.whatsNew || s.changelogOpen) _Changelog(s: s, all: s.changelogOpen),
+            if (s.adminAsk) _AdminCard(s: s),
             if (s.legalOpen != null) Positioned.fill(child: LegalPage(s: s)),
           ],
         ),
@@ -298,6 +302,37 @@ class _Veil extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Windows: для TUN нужны права администратора — перезапустить «Лоцман».
+class _AdminCard extends StatelessWidget {
+  const _AdminCard({required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    return _Veil(
+      onClose: s.dismissAdmin,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Нужны права администратора', style: p.text(18, weight: FontWeight.w600, display: true)),
+          const SizedBox(height: 8),
+          Text(
+            'Режим TUN создаёт сетевой адаптер Wintun и меняет маршруты Windows — без прав администратора '
+            'система этого не даст. «Лоцман» перезапустится, Windows спросит разрешение.',
+            style: p.text(14, color: p.muted),
+          ),
+          const SizedBox(height: 16),
+          PillButton(label: 'Перезапустить от имени администратора', primary: true, onTap: () => s.acceptAdmin()),
+          const SizedBox(height: 8),
+          PillButton(label: 'Остаться на системном прокси', onTap: s.dismissAdmin),
+        ],
       ),
     );
   }
@@ -540,7 +575,7 @@ class _LegalGate extends StatelessWidget {
                       'Серверы в подписках принадлежат чужим людям. Их владелец видит, к каким сайтам вы ходите, '
                           'поэтому пароли и данные карт через непроверенные серверы лучше не передавать.',
                       'Автору приложение ничего не отправляет: нет регистрации, аналитики и рекламы. '
-                          'Всё хранится на телефоне.',
+                          'Всё хранится на вашем устройстве.',
                       'Соблюдать законы своей страны и правила сервисов — ваша обязанность.',
                       'Приложение даётся «как есть», без гарантий, что оно будет работать в вашей сети.',
                     ])

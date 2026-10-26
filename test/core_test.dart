@@ -5,6 +5,8 @@ import 'package:locman/core/b64.dart';
 import 'package:locman/core/catalog.dart';
 import 'package:locman/core/link_parser.dart';
 import 'package:locman/core/node.dart';
+import 'package:locman/core/qr.dart';
+import 'package:locman/core/routes.dart';
 import 'package:locman/core/subscription.dart';
 import 'package:locman/core/xray_config.dart';
 import 'package:locman/engine/net.dart';
@@ -310,6 +312,97 @@ void main() {
     expect(k2, [vless]);
     final (u3, _, _) = AppState.splitImport('$data https://b.example.com/x');
     expect(u3, ['https://a.example.com/sub/1', 'https://b.example.com/x']);
+  });
+
+  test('QR-код совпадает с эталоном (python-qrcode)', () {
+    final q = QrCode.encode(utf8.encode('https://example.com/sub/123'))!;
+    expect(q.version, 2);
+    expect(q.mask, 1);
+    final expected = [
+      '1111111010011010001111111',
+      '1000001011101110101000001',
+      '1011101000111100101011101',
+      '1011101000100110001011101',
+      '1011101011110010001011101',
+      '1000001010010010001000001',
+      '1111111010101010101111111',
+      '0000000010111011100000000',
+      '1110011011101010111110011',
+      '0010100001100101011101011',
+      '0000011110010001010011101',
+      '1101100111010010100101000',
+      '0011111101010001101100001',
+      '0010010011010011101100011',
+      '1110101110111011111001101',
+      '0010100110110010110111000',
+      '1101111101010000111110010',
+      '0000000010010010100010001',
+      '1111111000110100101010001',
+      '1000001010000011100010011',
+      '1011101000110001111110010',
+      '1011101001010000010010110',
+      '1011101011010011110111011',
+      '1000001011111001111110000',
+      '1111111010101010101001001',
+    ];
+    final got = [
+      for (var y = 0; y < q.size; y++) [for (var x = 0; x < q.size; x++) q.dark(x, y) ? '1' : '0'].join(),
+    ];
+    expect(got, expected);
+    String digest(QrCode c) {
+      var h = 0x811c9dc5;
+      var n = 0;
+      for (var y = 0; y < c.size; y++) {
+        for (var x = 0; x < c.size; x++) {
+          final b = c.dark(x, y) ? 0x31 : 0x30;
+          if (b == 0x31) n++;
+          h = ((h ^ b) * 0x01000193) & 0xffffffff;
+        }
+      }
+      return '${c.version}/${c.mask}/${c.size}/$n/${h.toRadixString(16)}';
+    }
+
+    expect(digest(QrCode.encode(utf8.encode('x' * 933))!), '22/0/105/5610/acf3e035');
+    expect(digest(QrCode.encode([for (var r = 0; r < 4; r++) ...List.generate(256, (i) => i)])!), '23/1/109/6025/73d6b49c');
+    expect(QrCode.encode(List.filled(3000, 65)), isNull);
+    final png = q.toPng(scale: 4);
+    expect(png.sublist(0, 4), [137, 80, 78, 71]);
+  });
+
+  test('маршруты TUN: весь IPv4, кроме локальных сетей', () {
+    final r = publicIpv4();
+    bool covered(String ip) {
+      final n = ip.split('.').fold<int>(0, (a, p) => (a << 8) | int.parse(p));
+      for (final c in r) {
+        final parts = c.split('/');
+        final base = parts[0].split('.').fold<int>(0, (a, p) => (a << 8) | int.parse(p));
+        final len = int.parse(parts[1]);
+        final mask = len == 0 ? 0 : (0xFFFFFFFF << (32 - len)) & 0xFFFFFFFF;
+        if ((n & mask) == (base & mask)) return true;
+      }
+      return false;
+    }
+
+    expect(covered('8.8.8.8'), isTrue);
+    expect(covered('1.1.1.1'), isTrue);
+    expect(covered('95.163.1.2'), isTrue);
+    expect(covered('192.168.1.1'), isFalse);
+    expect(covered('10.0.0.5'), isFalse);
+    expect(covered('127.0.0.1'), isFalse);
+    expect(covered('224.0.0.1'), isFalse);
+  });
+
+  test('Windows: конфиг TUN и системного прокси', () {
+    final n = LinkParser.parse(vless)!;
+    const w = WinTunnel(tun: true, httpPort: 10809, socksPort: 10808, metricsPort: 11111, leakBlock: true);
+    final c = jsonDecode(XrayConfig.build(n, local: local, win: w, tunRoutes: const ['1.0.0.0/8'])) as Map<String, dynamic>;
+    final tun = (c['inbounds'] as List).cast<Map>().firstWhere((i) => i['protocol'] == 'tun');
+    expect(tun['settings']['autoSystemRoutingTable'], ['1.0.0.0/8', '2000::/3']);
+    expect(tun['settings']['autoSystemWfpBlockLeak'], ['dns']);
+    expect((c['inbounds'] as List).any((i) => i['tag'] == 'sys' && i['port'] == 10809), isTrue);
+    expect(c['metrics'], {'listen': '127.0.0.1:11111'});
+    final rules = (c['routing']['rules'] as List).cast<Map>();
+    expect(rules.any((r) => (r['process'] as List?)?.contains('locman.exe') == true), isTrue);
   });
 }
 

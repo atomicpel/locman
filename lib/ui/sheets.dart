@@ -225,7 +225,8 @@ class _AddFormState extends State<_AddForm> {
               icon: Icon(Icons.content_paste_rounded, size: 16, color: p.accent),
               label: Text('Вставить из буфера', style: p.text(14, color: p.accent)),
             ),
-            TextButton.icon(
+            if (!Native.win)
+              TextButton.icon(
               onPressed: () {
                 Navigator.pop(context);
                 widget.s.scanImport();
@@ -304,14 +305,16 @@ Future<void> showShareSheet(BuildContext context, AppState s) {
           style: p.text(13, color: p.muted),
         ),
         const SizedBox(height: 4),
-        _sheetButton(p, Icons.share_rounded, 'Поделиться ссылкой', () {
+        _sheetButton(p, Icons.share_rounded, Native.win ? 'Копировать ссылку с пояснением' : 'Поделиться ссылкой', () {
+          if (Native.win) s.flash('Скопировано — вставьте в мессенджер');
           Native.share(
             'Подписки для «Лоцмана» ($what). Откройте ссылку на телефоне с «Лоцманом» '
             'или вставьте её в «Источники → Добавить»:\n$link',
             title: 'Поделиться подписками',
           );
         }),
-        _sheetButton(p, Icons.list_rounded, 'Поделиться списком', () {
+        _sheetButton(p, Icons.list_rounded, Native.win ? 'Копировать списком' : 'Поделиться списком', () {
+          if (Native.win) s.flash('Список скопирован');
           Native.share(lines.join('\n'), title: 'Поделиться подписками');
         }),
         _sheetButton(p, Icons.copy_rounded, 'Копировать ссылку', () {

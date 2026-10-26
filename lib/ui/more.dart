@@ -45,11 +45,11 @@ class _MoreIndex extends StatelessWidget {
     final p = PaletteScope.of(context);
     final rows = [
       (SettingsPage.look, 'Оформление', skinMeta[s.skin]!.$1),
-      (SettingsPage.link, 'Подключение', 'Режим ${modeMeta[s.mode]!.$1}${s.pickFrom == 'reality' ? ', только Reality' : ''}${s.countries == 'noRu' ? ', без RU' : ''}, работа в фоне'),
-      (SettingsPage.apps, 'Мимо узла', s.excludes.isEmpty ? 'Приложения без туннеля' : 'Выбрано: ${s.excludes.length}'),
+      (SettingsPage.link, 'Подключение', 'Режим ${modeMeta[s.mode]!.$1}${s.pickFrom == 'reality' ? ', только Reality' : ''}${s.countries == 'noRu' ? ', без RU' : ''}${Native.win ? (s.winMode == 'tun' ? ', TUN' : ', системный прокси') : ', работа в фоне'}'),
+      if (!Native.win) (SettingsPage.apps, 'Мимо узла', s.excludes.isEmpty ? 'Приложения без туннеля' : 'Выбрано: ${s.excludes.length}'),
       (SettingsPage.safe, 'Безопасность', 'DNS ${dnsMeta[s.dns]} и скрытие слабых узлов'),
       (SettingsPage.probe, 'Проверка узлов', probeMeta[s.probe]!.$1),
-      (SettingsPage.radio, 'Скрытые настройки сети', 'Экран *#*#4636#*#*: тип сети, LTE/5G'),
+      if (!Native.win) (SettingsPage.radio, 'Скрытые настройки сети', 'Экран *#*#4636#*#*: тип сети, LTE/5G'),
       (SettingsPage.about, 'О клиенте', s.update != null ? 'Доступна версия ${s.update!.versionName}' : 'Версия, обновления, журнал'),
     ];
     return ListView(
@@ -259,6 +259,7 @@ class _LinkPageState extends State<_LinkPage> with WidgetsBindingObserver {
               'Нашли заметно быстрее — предложим переключиться. Тратит около 15–20 МБ за поиск.',
           control: PillSwitch(on: s.autoFaster, onChanged: s.setAutoFaster),
         ),
+        if (Native.win) ..._windowsBlock(s, p) else ...[
         const SizedBox(height: 16),
         const SectionTitle('Движок туннеля'),
         const SizedBox(height: 8),
@@ -305,6 +306,7 @@ class _LinkPageState extends State<_LinkPage> with WidgetsBindingObserver {
           control: Icon(Icons.open_in_new_rounded, color: p.muted),
           onTap: Native.openVpnSettings,
         ),
+        ],
       ],
     );
   }
@@ -863,4 +865,48 @@ class _RadioPageState extends State<_RadioPage> with WidgetsBindingObserver {
     );
   }
 }
+
+/// Настройки Windows-версии: режим, автозапуск, значок у часов.
+List<Widget> _windowsBlock(AppState s, Palette p) => [
+      const SizedBox(height: 16),
+      const SectionTitle('Как пускать трафик'),
+      const SizedBox(height: 8),
+      Segment<String>(
+        value: s.winMode,
+        onChanged: (v) => s.setWinMode(v),
+        options: const [('proxy', 'Системный прокси'), ('tun', 'TUN — весь трафик')],
+      ),
+      const SizedBox(height: 8),
+      Text(
+        s.winMode == 'tun'
+            ? 'Через узел идёт весь трафик компьютера, включая игры и программы, которые не слушают прокси. '
+                'Нужны права администратора и драйвер Wintun (он рядом с программой). Локальная сеть идёт мимо узла.'
+            : 'Через узел идут браузеры и программы, которые берут системный прокси Windows. Права администратора не нужны. '
+                'Для остальных программ — HTTP 127.0.0.1:${s.winHttpPort} и SOCKS5 127.0.0.1:${s.winSocksPort}.',
+        style: p.text(14, color: p.muted),
+      ),
+      if (s.winMode == 'tun') ...[
+        const SizedBox(height: 12),
+        SettingRow(
+          title: 'Не пускать DNS мимо туннеля',
+          line: 'Фильтры Windows: запросы DNS других программ идут только через TUN. Может помешать локальному DNS, '
+              'виртуальным машинам и входу в гостевые Wi-Fi.',
+          control: PillSwitch(on: s.winLeakBlock, onChanged: s.setWinLeakBlock),
+        ),
+      ],
+      const SizedBox(height: 16),
+      SettingRow(
+        title: 'Запускать вместе с Windows',
+        line: s.winMode == 'tun'
+            ? 'Через планировщик заданий с правами администратора — и сразу подключаться.'
+            : 'При входе в Windows «Лоцман» запустится свёрнутым к часам и подключится.',
+        control: PillSwitch(on: s.winAutostart, onChanged: s.setWinAutostart),
+      ),
+      const SizedBox(height: 12),
+      SettingRow(
+        title: 'Сворачивать к часам',
+        line: 'Крестик прячет окно в значок у часов, VPN продолжает работать. Выйти — правой кнопкой по значку → «Выход».',
+        control: PillSwitch(on: s.winTray, onChanged: s.setWinTray),
+      ),
+    ];
 

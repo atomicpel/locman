@@ -174,24 +174,159 @@ jobs:
           path: dist/*.apk
           retention-days: 14
 
+  windows:
+    name: Windows (x64)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Версия
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* || "$GITHUB_REF" == refs/heads/release/v* ]]; then
+            TAG="${GITHUB_REF_NAME#release/}"
+            VERSION="${TAG#v}"
+            IFS=. read -r MA MI PA <<<"$VERSION"
+            CODE=$((MA * 10000 + MI * 100 + PA))
+          else
+            VERSION="0.0.${{ github.run_number }}"
+            CODE=${{ github.run_number }}
+          fi
+          XRAY=$(grep -oE 'XRAY_LIB_VERSION:-v[0-9.]+' tools/fetch_natives.sh | sed 's/.*:-//')
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "CODE=$CODE" >> "$GITHUB_ENV"
+          echo "XRAY=$XRAY" >> "$GITHUB_ENV"
+          mkdir -p report
+          { echo "Лоцман для Windows $VERSION ($CODE), Xray $XRAY"; flutter --version; } | tee report/versions.txt
+
+      - name: Ядро Xray для Windows
+        run: |
+          mkdir -p xray-win
+          curl -sSfL -o xray-win/xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY}/Xray-windows-64.zip"
+          (cd xray-win && 7z x -y xray.zip xray.exe wintun.dll LICENSE LICENSE-Wintun > /dev/null && rm xray.zip && ls -la)
+
+      - name: Платформенные файлы Flutter
+        run: |
+          flutter create --org app --project-name locman --platforms windows .
+          rm -f test/widget_test.dart
+          python tools/patch_windows.py > report/windows-patch.txt
+          cp catalog/catalog.json assets/catalog.json
+          python tools/changelog.py "$VERSION"
+
+      - name: Сборка
+        run: |
+          set -o pipefail
+          flutter build windows --release --build-name "$VERSION" --build-number "$CODE" \
+            --dart-define=LOCMAN_VERSION="$VERSION" --dart-define=LOCMAN_CODE="$CODE" --dart-define=LOCMAN_XRAY="${XRAY#v}" \
+            2>&1 | tee report/build.txt
+          OUT=build/windows/x64/runner/Release
+          cp xray-win/xray.exe xray-win/wintun.dll "$OUT/"
+          cp xray-win/LICENSE "$OUT/LICENSE-Xray.txt"
+          cp xray-win/LICENSE-Wintun "$OUT/LICENSE-Wintun.txt"
+          cp LICENSE "$OUT/LICENSE-Locman.txt"
+          ls -la "$OUT" | tee report/files.txt
+          for f in locman.exe flutter_windows.dll xray.exe wintun.dll data/app.so; do
+            [ -f "$OUT/$f" ] || { echo "::error::В сборке нет $f"; exit 1; }
+          done
+
+      - name: Установщик и архив
+        run: |
+          set -o pipefail
+          mkdir -p dist
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          if [ ! -f "$ISCC" ]; then choco install innosetup -y --no-progress > /dev/null; fi
+          "$ISCC" //DAppVersion="$VERSION" //DSourceDir="$(cygpath -w "$PWD/build/windows/x64/runner/Release")" \
+            //DOutDir="$(cygpath -w "$PWD/dist")" tools/locman.iss | tail -n 20 | tee report/installer.txt
+          cp -r build/windows/x64/runner/Release build/windows/x64/runner/Locman
+          powershell -NoProfile -Command "Compress-Archive -Path 'build\\windows\\x64\\runner\\Locman' -DestinationPath 'dist\\Locman-$VERSION-windows-x64-portable.zip' -Force"
+          ls -la dist
+          (cd dist && sha256sum * | tee ../report/sha256.txt)
+
+      - name: Отчёт о сборке
+        if: always()
+        run: |
+          tail -n 300 report/build.txt > report/build-tail.txt 2>/dev/null || true
+          rm -f report/build.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: report-windows
+          path: report
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: locman-windows
+          path: dist/*
+          retention-days: 14
+
+      - name: Ветка ci-build-win
+        if: always() && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        run: |
+          OUT="$RUNNER_TEMP/ci-build-win"
+          mkdir -p "$OUT"
+          cp -r report "$OUT/" 2>/dev/null || true
+          cp dist/*setup.exe "$OUT/" 2>/dev/null || true
+          echo "${{ github.sha }} ${{ job.status }}" > "$OUT/STATUS"
+          cd "$OUT"
+          git init -q -b ci-build-win
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Сборка Windows ${{ github.run_number }}"
+          for i in 1 2 3; do
+            git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:ci-build-win && break
+            sleep 10
+          done
+
+  release:
+    name: Релиз
+    needs: [build, windows]
+    if: startsWith(github.ref, 'refs/heads/release/v') || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: art
+
       - name: Релиз
-        if: env.RELEASE == '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          TAG="${GITHUB_REF_NAME#release/}"
+          VERSION="${TAG#v}"
+          IFS=. read -r MA MI PA <<<"$VERSION"
+          CODE=$((MA * 10000 + MI * 100 + PA))
+          mkdir -p dist
+          cp art/locman-apk/*.apk dist/
+          cp art/locman-windows/*setup.exe art/locman-windows/*portable.zip dist/
+          (cd dist && sha256sum *.apk *.exe *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt)
           python3 tools/make_update_json.py "$VERSION" "$CODE" "$GITHUB_REPOSITORY" "$TAG" \
-            release-notes.txt dist/*.apk > dist/update.json
+            release-notes.txt dist/*.apk dist/*setup.exe > dist/update.json
           cat dist/update.json
-          CERT=$(grep -m1 'SHA-256' report/cert.txt | awk '{print toupper($NF)}' | sed 's/../&:/g; s/:$//')
+          CERT=$(grep -m1 'SHA-256' art/report/cert.txt | awk '{print toupper($NF)}' | sed 's/../&:/g; s/:$//')
           {
             echo "Что нового:"
             sed 's/^/- /' release-notes.txt
             echo
-            echo "Для Poco X7 Pro и других телефонов на arm64: Locman-$VERSION-arm64-v8a.apk."
+            echo "Android (Poco X7 Pro и другие на arm64): Locman-$VERSION-arm64-v8a.apk."
+            echo "Windows 10/11: Locman-$VERSION-windows-x64-setup.exe (установщик) или Locman-$VERSION-windows-x64-portable.zip (без установки)."
             echo
-            echo "Отпечаток сертификата подписи (SHA-256): $CERT"
+            echo "Отпечаток сертификата подписи APK (SHA-256): $CERT"
           } > dist/NOTES.md
-          gh release create "$TAG" --target "$GITHUB_SHA" dist/*.apk dist/SHA256SUMS.txt dist/update.json \
+          gh release create "$TAG" --target "$GITHUB_SHA" dist/*.apk dist/*.exe dist/*.zip dist/SHA256SUMS.txt dist/update.json \
             --title "Лоцман $VERSION" --notes-file dist/NOTES.md --latest
           git config user.name "github-actions"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

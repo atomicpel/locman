@@ -70,13 +70,14 @@ class SourcesScreen extends StatelessWidget {
               ),
               const SizedBox(width: 8),
             ],
-            Expanded(
-              child: PillButton(
-                label: 'Сканировать QR',
-                icon: Icons.qr_code_scanner_rounded,
-                onTap: s.scanImport,
+            if (!Native.win)
+              Expanded(
+                child: PillButton(
+                  label: 'Сканировать QR',
+                  icon: Icons.qr_code_scanner_rounded,
+                  onTap: s.scanImport,
+                ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 12),

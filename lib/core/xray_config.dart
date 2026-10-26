@@ -20,6 +20,32 @@ List<String> dnsOrder(String preferred) =>
 
 const fragmentTag = 'fragment';
 
+/// Windows: как пускать трафик в узел и какие локальные порты открыть.
+class WinTunnel {
+  const WinTunnel({
+    required this.tun,
+    required this.httpPort,
+    required this.socksPort,
+    required this.metricsPort,
+    this.leakBlock = false,
+    this.logFile,
+  });
+
+  /// true — TUN (Wintun, весь трафик, нужны права администратора); false — системный прокси.
+  final bool tun;
+
+  /// HTTP- и SOCKS-прокси без пароля на 127.0.0.1 — для системного прокси и программ.
+  final int httpPort;
+  final int socksPort;
+
+  /// Счётчики трафика ядра (/debug/vars) на 127.0.0.1.
+  final int metricsPort;
+
+  /// Фильтры WFP: DNS только через TUN.
+  final bool leakBlock;
+  final String? logFile;
+}
+
 /// Как подключаться к узлу, если обычный способ не пропускает данные:
 /// другой отпечаток браузера, всё через одно соединение (mux), дробление первого пакета.
 /// [dns] — какой DNS-сервер отвечает через этот узел.
@@ -84,6 +110,8 @@ class XrayConfig {
     int mtu = 1500,
     NodeProfile? profile,
     bool udp = true,
+    WinTunnel? win,
+    List<String> tunRoutes = const [],
   }) {
     final provider = node.isJson ? jsonDecode(node.raw) as Map<String, dynamic> : null;
     final frag = (profile?.frag ?? fragment) && node.canFragment;
@@ -100,7 +128,10 @@ class XrayConfig {
     final providerRouting = provider?['routing'] as Map?;
     final balancers = providerRouting?['balancers'] as List?;
     final config = <String, dynamic>{
-      'log': {'loglevel': 'warning'},
+      'log': {
+        'loglevel': 'warning',
+        if (win?.logFile != null) ...{'access': 'none', 'error': win!.logFile},
+      },
     };
     if (!forTest) {
       if (local == null) throw ArgumentError('нужен локальный вход');
@@ -110,6 +141,38 @@ class XrayConfig {
         'routeOnly': true,
       };
       config['inbounds'] = [
+        if (win != null && win.tun)
+          {
+            'tag': 'tun',
+            'protocol': 'tun',
+            'settings': {
+              'name': 'Locman',
+              'mtu': mtu,
+              'gateway': ['172.19.255.1/30', 'fdfe:dcba:9876::1/126'],
+              'dns': ['1.1.1.1'],
+              'autoSystemRoutingTable': [...tunRoutes, '2000::/3'],
+              if (win.leakBlock) 'autoSystemWfpBlockLeak': ['dns'],
+            },
+            'sniffing': sniffing,
+          },
+        if (win != null) ...[
+          {
+            'tag': 'sys',
+            'listen': '127.0.0.1',
+            'port': win.httpPort,
+            'protocol': 'http',
+            'settings': {'allowTransparent': false},
+            'sniffing': sniffing,
+          },
+          {
+            'tag': 'syssocks',
+            'listen': '127.0.0.1',
+            'port': win.socksPort,
+            'protocol': 'socks',
+            'settings': {'auth': 'noauth', 'udp': true},
+            'sniffing': sniffing,
+          },
+        ],
         if (xrayTun)
           {
             'tag': 'tun',
@@ -150,6 +213,7 @@ class XrayConfig {
       ];
       // Счётчики трафика для уведомления и экрана (QueryAllOutboundTrafficStats).
       config['stats'] = <String, dynamic>{};
+      if (win != null) config['metrics'] = {'listen': '127.0.0.1:${win.metricsPort}'};
       config['policy'] = {
         'system': {'statsOutboundUplink': true, 'statsOutboundDownlink': true},
       };
@@ -188,9 +252,16 @@ class XrayConfig {
           if (encryptedDns)
             {
               'type': 'field',
-              'inboundTag': ['socks', 'tun'],
+              'inboundTag': ['socks', 'tun', 'syssocks'],
               'port': '53',
               'outboundTag': 'dns-out',
+            },
+          // Windows TUN: сам «Лоцман» и пробные ядра проверки ходят напрямую, а не через текущий узел.
+          if (win != null && win.tun)
+            {
+              'type': 'field',
+              'process': ['xray/', 'locman.exe'],
+              'outboundTag': 'direct',
             },
           {'type': 'field', 'ip': _privateCidrs, 'outboundTag': 'direct'},
           if (directRu)

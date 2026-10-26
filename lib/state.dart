@@ -9,12 +9,14 @@ import 'package:flutter/services.dart';
 import 'core/b64.dart';
 import 'core/catalog.dart';
 import 'core/node.dart';
+import 'core/routes.dart';
 import 'core/ru.dart';
 import 'core/subscription.dart';
 import 'core/xray_config.dart';
 import 'data/files.dart';
 import 'engine/native.dart';
 import 'engine/net.dart';
+import 'engine/win_core.dart';
 
 enum Skin { glass, paper, dot, signal, island }
 
@@ -192,6 +194,27 @@ class AppState extends ChangeNotifier {
 
   /// Принятая редакция условий и политики (0 — ещё не принимали).
   int legalAccepted = 0;
+
+  // ---------- Windows ----------
+
+  /// 'proxy' — системный прокси (без прав администратора); 'tun' — весь трафик через Wintun.
+  String winMode = 'proxy';
+
+  /// Запускать вместе с Windows (и сразу подключаться).
+  bool winAutostart = false;
+
+  /// Крестик окна прячет «Лоцман» к часам, а не закрывает.
+  bool winTray = true;
+
+  /// TUN: фильтры Windows, чтобы DNS не уходил мимо туннеля.
+  bool winLeakBlock = false;
+
+  /// Порты локального прокси без пароля (для системного прокси и программ).
+  int winHttpPort = 10809;
+  int winSocksPort = 10808;
+
+  /// Спросить про перезапуск от имени администратора (для TUN).
+  bool adminAsk = false;
   Set<String> noFrag = {};
   String? pinnedId;
   String? lastNodeId;
@@ -287,6 +310,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     _events = Native.events().listen(_onNative, onError: (_) {});
+    if (Native.win) {
+      await WinCore.resetStaleProxy();
+      unawaited(WinCore.setCloseToTray(winTray));
+    }
     try {
       _applyStatus(await Native.state());
     } catch (_) {}
@@ -306,6 +333,9 @@ class AppState extends ChangeNotifier {
     unawaited(_background());
     if (info?.smoke == true) {
       unawaited(_smoke());
+    } else if (Native.win && WinCore.autostarted && onboarded && !needsLegal && phase == Phase.off) {
+      // Запущен вместе с Windows — подключаемся сразу.
+      unawaited(connect());
     } else if (onboarded && autoConnect && phase == Phase.off) {
       // Чужой VPN уже включён — не перебиваем его.
       if (await Native.otherVpn()) {
@@ -477,6 +507,10 @@ class AppState extends ChangeNotifier {
     sendHwid = j['sendHwid'] != false;
     deadGroup = j['deadGroup'] != false;
     legalAccepted = (j['legalAccepted'] as num?)?.toInt() ?? 0;
+    winMode = j['winMode'] == 'tun' ? 'tun' : 'proxy';
+    winAutostart = j['winAutostart'] == true;
+    winTray = j['winTray'] != false;
+    winLeakBlock = j['winLeakBlock'] == true;
     banned = ((j['banned'] as List?) ?? const []).map((e) => e.toString()).toSet();
     noFrag = ((j['noFrag'] as List?) ?? const []).map((e) => e.toString()).toSet();
     pinnedId = j['pinnedId'] as String?;
@@ -499,8 +533,11 @@ class AppState extends ChangeNotifier {
 
   void _save() {
     _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 300), () {
-      unawaited(files?.writeJson('state.json', {
+    _saveTimer = Timer(const Duration(milliseconds: 300), () => unawaited(_flushSave()));
+  }
+
+  Future<void> _flushSave() async {
+    await files?.writeJson('state.json', {
         'onboarded': onboarded,
         'publicOn': publicOn,
         'skin': skin.name,
@@ -530,6 +567,10 @@ class AppState extends ChangeNotifier {
         'sendHwid': sendHwid,
         'deadGroup': deadGroup,
         'legalAccepted': legalAccepted,
+        'winMode': winMode,
+        'winAutostart': winAutostart,
+        'winTray': winTray,
+        'winLeakBlock': winLeakBlock,
         'banned': banned.toList(),
         'noFrag': noFrag.take(800).toList(),
         'pinnedId': pinnedId,
@@ -540,8 +581,7 @@ class AppState extends ChangeNotifier {
         'intervals': intervals,
         'mine': mine.map((s) => s.toJson()).toList(),
         'journal': journal.map((e) => [e.at, e.text]).toList(),
-      }));
-    });
+      });
   }
 
   void _set(VoidCallback change) {
@@ -607,13 +647,67 @@ class AppState extends ChangeNotifier {
   }
 
   void setAutoUpdateCheck(bool v) => _set(() => autoUpdateCheck = v);
+
+  Future<void> setWinMode(String v) async {
+    if (v == 'tun' && !await WinCore.isAdmin()) {
+      adminAsk = true;
+      notifyListeners();
+      return;
+    }
+    _set(() => winMode = v);
+    log(v == 'tun' ? 'Режим: TUN — весь трафик через узел' : 'Режим: системный прокси');
+    if (winAutostart) unawaited(WinCore.setAutostart(true, elevated: v == 'tun'));
+    _reapply();
+  }
+
+  /// Перезапуск от имени администратора, чтобы включить TUN.
+  Future<void> acceptAdmin() async {
+    adminAsk = false;
+    _set(() => winMode = 'tun');
+    _saveTimer?.cancel();
+    await _flushSave();
+    if (await WinCore.relaunchAdmin()) {
+      await disconnect();
+      await WinCore.quit();
+    } else {
+      _set(() => winMode = 'proxy');
+      flash('Без прав администратора TUN не включится');
+    }
+  }
+
+  void dismissAdmin() {
+    adminAsk = false;
+    notifyListeners();
+  }
+
+  void setWinAutostart(bool v) {
+    _set(() => winAutostart = v);
+    unawaited(WinCore.setAutostart(v, elevated: winMode == 'tun'));
+  }
+
+  void setWinTray(bool v) {
+    _set(() => winTray = v);
+    unawaited(WinCore.setCloseToTray(v));
+  }
+
+  void setWinLeakBlock(bool v) {
+    _set(() => winLeakBlock = v);
+    _reapply();
+  }
+
+  /// Выход из меню у часов: снимаем прокси, гасим ядро, закрываем окно.
+  Future<void> quitApp() async {
+    if (phase == Phase.on || phase == Phase.seek) await disconnect();
+    await WinCore.stop();
+    await WinCore.quit();
+  }
   void setSendHwid(bool v) => _set(() => sendHwid = v);
   void setDeadGroup(bool v) => _set(() => deadGroup = v);
 
   // ---------- Условия и политика ----------
 
   /// Номер текущей редакции условий использования и политики конфиденциальности.
-  static const legalRevision = 2;
+  static const legalRevision = 3;
 
   bool get needsLegal => legalAccepted < legalRevision;
 
@@ -1496,7 +1590,7 @@ class AppState extends ChangeNotifier {
         _throttledNotify();
         return;
       }
-      if (!n.coreOnly) {
+      if (!n.coreOnly && !_tcpBlind) {
         final key = '${n.address.toLowerCase()}:${n.port}';
         final tcp = await (tcpCache[key] ??= Net.tcping(n.address, n.port, timeout: const Duration(milliseconds: 1500)));
         if (stopped()) return;
@@ -1605,7 +1699,7 @@ class AppState extends ChangeNotifier {
     final gate = _Gate(probeMeta[probe]!.$2);
     await _pool(cands, 32, (n) async {
       if (stale()) return;
-      if (!n.coreOnly && await Net.tcping(n.address, n.port, timeout: const Duration(milliseconds: 1500)) < 0) {
+      if (!n.coreOnly && !_tcpBlind && await Net.tcping(n.address, n.port, timeout: const Duration(milliseconds: 1500)) < 0) {
         _recordCheck(n, -1, real: false);
       } else {
         final d = stale() ? 0 : await _realTest(n, gate: gate);
@@ -1821,6 +1915,12 @@ class AppState extends ChangeNotifier {
       _fail('Нужно разрешение на VPN');
       return;
     }
+    if (Native.win && winMode == 'tun' && !await WinCore.isAdmin()) {
+      _fail('Для режима TUN нужны права администратора');
+      adminAsk = true;
+      notifyListeners();
+      return;
+    }
 
     // Шаг 1: смотрим сеть. Если туннель уже поднят, проверка напрямую всё равно честная:
     // само приложение в туннель не заходит.
@@ -1903,7 +2003,7 @@ class AppState extends ChangeNotifier {
     bool over() => cancelled() || done.isCompleted;
     unawaited(_pool(pool, _tcpParallel, (n) async {
       if (over()) return;
-      final tcp = (n.coreOnly || _skipTcp) ? 0 : await Net.tcping(n.address, n.port);
+      final tcp = (n.coreOnly || _skipTcp || _tcpBlind) ? 0 : await Net.tcping(n.address, n.port);
       if (tcp < 0) {
         _record(n.id, -1, real: false);
         return;
@@ -1989,8 +2089,10 @@ class AppState extends ChangeNotifier {
               directRu: directRu,
               dns: dns,
               fragment: _fragFor(n),
-              xrayTun: tunEngine == 'xray',
-              profile: profiles[n.id]),
+              xrayTun: !Native.win && tunEngine == 'xray',
+              profile: profiles[n.id],
+              win: _winTunnel,
+              tunRoutes: _winRoutes),
           'test': _testConfig(n, frag: _fragFor(n)),
           'name': n.title,
           'nodeId': n.id,
@@ -2004,6 +2106,25 @@ class AppState extends ChangeNotifier {
     if (phase != Phase.on || n == null || local == null) return;
     unawaited(Native.setBackups(_backups(n, local)).catchError((_) {}));
   }
+
+  /// Windows: текущие локальные порты и маршруты TUN (для запасных узлов сторожа).
+  WinTunnel? _winTunnel;
+  static final List<String> _winRoutes = Native.win ? publicIpv4() : const [];
+
+  /// Предпочтительный порт, если свободен, иначе любой свободный.
+  static Future<int> _portOr(int preferred, {int avoid = 0}) async {
+    if (preferred != avoid) {
+      try {
+        final s = await ServerSocket.bind(InternetAddress.loopbackIPv4, preferred);
+        await s.close();
+        return preferred;
+      } catch (_) {}
+    }
+    return Net.freePort();
+  }
+
+  /// Windows TUN поднят: TCP-проверка «сквозь» TUN всегда успешна, она бессмысленна.
+  bool get _tcpBlind => Native.win && winMode == 'tun' && WinCore.state.phase == 'connected';
 
   /// Поднимаем туннель через узел и проверяем, что трафик идёт.
   Future<bool> _bring(ProxyNode n, bool Function() cancelled) async {
@@ -2029,10 +2150,34 @@ class AppState extends ChangeNotifier {
         target = n.withAddress(ips[best < 0 ? 0 : best]);
       }
     }
-    final xrayTun = tunEngine == 'xray';
+    final xrayTun = !Native.win && tunEngine == 'xray';
+    WinTunnel? win;
+    if (Native.win) {
+      winHttpPort = await _portOr(10809);
+      winSocksPort = await _portOr(10808, avoid: winHttpPort);
+      win = WinTunnel(
+        tun: winMode == 'tun',
+        httpPort: winHttpPort,
+        socksPort: winSocksPort,
+        metricsPort: await Net.freePort(),
+        leakBlock: winLeakBlock,
+        logFile: '${WinCore.dataDir}\\xray.log',
+      );
+      try {
+        File(win.logFile!).writeAsStringSync('');
+      } catch (_) {}
+    }
+    _winTunnel = win;
     final config = XrayConfig.build(target,
-        local: local, directRu: directRu, dns: dns, fragment: _fragFor(n), xrayTun: xrayTun, profile: profiles[n.id]);
-    final bypass = {...excludes, if (directRu) ...directApps}.toList();
+        local: local,
+        directRu: directRu,
+        dns: dns,
+        fragment: _fragFor(n),
+        xrayTun: xrayTun,
+        profile: profiles[n.id],
+        win: win,
+        tunRoutes: _winRoutes);
+    final bypass = Native.win ? const <String>[] : {...excludes, if (directRu) ...directApps}.toList();
     _smokeSink?.call('bring ${target.address} tun=$tunEngine');
     // Ждём статус именно этого узла, чтобы не принять «подключено» от предыдущего.
     final waiter = Native.events()
@@ -2048,9 +2193,11 @@ class AppState extends ChangeNotifier {
         user: local.user,
         pass: local.pass,
         bypass: bypass,
-        tunMode: tunEngine,
+        tunMode: Native.win ? winMode : tunEngine,
         backups: _backups(n, local),
         testUrl: testUrl,
+        sysHttpPort: win?.httpPort ?? 0,
+        metricsPort: win?.metricsPort ?? 0,
       );
     } catch (e) {
       log('Служба VPN не запустилась: ${_short(e)}');
@@ -2131,6 +2278,15 @@ class AppState extends ChangeNotifier {
       _onNetwork();
     } else if (e is LinkEvent) {
       unawaited(_takeLink());
+    } else if (e is TrayEvent) {
+      switch (e.action) {
+        case 'toggle':
+          togglePower();
+        case 'exit':
+          unawaited(quitApp());
+        default:
+          unawaited(WinCore.showWindow());
+      }
     }
   }
 
@@ -2363,7 +2519,7 @@ class AppState extends ChangeNotifier {
     updateProgress = 0;
     updateError = null;
     notifyListeners();
-    final target = File('${info!.cacheDir}/updates/locman-${u.versionCode}.apk');
+    final target = File('${info!.cacheDir}/updates/locman-${u.versionCode}.${Native.win ? 'exe' : 'apk'}');
     try {
       await target.parent.create(recursive: true);
       Object? last;
@@ -2387,7 +2543,12 @@ class AppState extends ChangeNotifier {
         throw HttpException(problem);
       }
       final started = await Native.installApk(target.path);
-      if (!started) flash('Разрешите установку из «Лоцмана» и нажмите «Обновить» ещё раз');
+      if (Native.win) {
+        // Установщик сам закроет и снова откроет «Лоцман»; снимаем прокси и выходим.
+        if (started) await quitApp();
+      } else if (!started) {
+        flash('Разрешите установку из «Лоцмана» и нажмите «Обновить» ещё раз');
+      }
     } catch (e) {
       updateError = _short(e);
       flash('Обновление: $updateError');

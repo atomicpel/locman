@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 
 import '../core/xray_config.dart';
+import 'win_core.dart';
 
 /// Состояние службы VPN, как его видит Android-часть.
 class VpnStatus {
@@ -91,8 +95,15 @@ class Native {
 
   static Stream<Object>? _stream;
 
+  /// Windows-версия: всё, что на Android делает Kotlin, делает [WinCore].
+  static final bool win = Platform.isWindows;
+
+  static const winVersion = String.fromEnvironment('LOCMAN_VERSION', defaultValue: '0.0.0');
+  static const winCode = int.fromEnvironment('LOCMAN_CODE', defaultValue: 0);
+  static const winXray = String.fromEnvironment('LOCMAN_XRAY', defaultValue: '');
+
   /// События службы: [VpnStatus] и [Traffic].
-  static Stream<Object> events() => _stream ??= _events.receiveBroadcastStream().map((e) {
+  static Stream<Object> events() => _stream ??= win ? WinCore.events : _events.receiveBroadcastStream().map((e) {
         final m = e as Map;
         if (m['type'] == 'watch') {
           return WatchEvent(m['kind'] as String, m['name'] as String?, m['nodeId'] as String?);
@@ -111,6 +122,13 @@ class Native {
       }).asBroadcastStream();
 
   static Future<NativeInfo> info() async {
+    if (win) {
+      WinCore.init();
+      final dir = WinCore.dataDir;
+      final cache = Directory('$dir\\cache')..createSync(recursive: true);
+      return NativeInfo(dir, cache.path, winVersion, winCode, winXray.isEmpty ? null : winXray, const ['windows-x64'],
+          model: 'Windows', release: Platform.operatingSystemVersion);
+    }
     final m = (await _core.invokeMethod<Map>('info'))!;
     return NativeInfo(
       m['filesDir'] as String,
@@ -128,9 +146,11 @@ class Native {
     );
   }
 
-  static Future<bool> prepare() async => (await _core.invokeMethod<bool>('prepare')) ?? false;
+  static Future<bool> prepare() async => win ? true : (await _core.invokeMethod<bool>('prepare')) ?? false;
 
-  static Future<void> requestNotifications() => _core.invokeMethod('notifications');
+  static Future<void> requestNotifications() async {
+    if (!win) await _core.invokeMethod('notifications');
+  }
 
   static Future<void> start({
     required String config,
@@ -145,8 +165,28 @@ class Native {
     List<Map<String, String>> backups = const [],
     int mtu = 1500,
     String? testUrl,
-  }) =>
-      _core.invokeMethod('start', {
+    int sysHttpPort = 0,
+    int metricsPort = 0,
+  }) async {
+    final a = <String, Object?>{
+      'config': config,
+      'name': name,
+      'nodeId': nodeId,
+      'socksPort': socksPort,
+      'httpPort': httpPort,
+      'user': user,
+      'pass': pass,
+      'tunMode': tunMode,
+      'backups': backups,
+      'testUrl': testUrl,
+      'sysHttpPort': sysHttpPort,
+      'metricsPort': metricsPort,
+    };
+    if (win) {
+      unawaited(WinCore.start(a));
+      return;
+    }
+    await _core.invokeMethod('start', {
         'config': config,
         'name': name,
         'nodeId': nodeId,
@@ -160,9 +200,11 @@ class Native {
         'backups': backups,
         if (testUrl != null) 'testUrl': testUrl,
       });
+  }
 
   /// Ссылка импорта, с которой открыли приложение (забирается один раз).
   static Future<String?> takeLink() async {
+    if (win) return WinCore.takeLink();
     try {
       return await _core.invokeMethod<String>('takeLink');
     } catch (_) {
@@ -172,6 +214,7 @@ class Native {
 
   /// Включён ли сейчас чужой VPN (не «Лоцман»).
   static Future<bool> otherVpn() async {
+    if (win) return false;
     try {
       return (await _core.invokeMethod<bool>('otherVpn')) ?? false;
     } catch (_) {
@@ -181,6 +224,7 @@ class Native {
 
   /// Заряд батареи: (процент или -1, заряжается ли).
   static Future<(int, bool)> battery() async {
+    if (win) return (-1, false);
     try {
       final m = await _core.invokeMethod<Map>('battery');
       return (((m?['level'] as num?) ?? -1).toInt(), m?['charging'] == true);
@@ -189,17 +233,20 @@ class Native {
     }
   }
 
-  static Future<void> stop() => _core.invokeMethod('stop');
+  static Future<void> stop() => win ? WinCore.stop() : _core.invokeMethod('stop');
 
   /// Обновить запасные узлы сторожа в уже поднятом туннеле.
-  static Future<void> setBackups(List<Map<String, String>> backups) =>
-      _core.invokeMethod('setBackups', {'backups': backups});
+  static Future<void> setBackups(List<Map<String, String>> backups) => win
+      ? WinCore.setBackups(backups)
+      : _core.invokeMethod('setBackups', {'backups': backups});
 
-  static Future<VpnStatus> state() async =>
-      VpnStatus.fromMap((await _core.invokeMethod<Map>('state')) ?? const {'phase': 'idle'});
+  static Future<VpnStatus> state() async => win
+      ? WinCore.stateWithLocal()
+      : VpnStatus.fromMap((await _core.invokeMethod<Map>('state')) ?? const {'phase': 'idle'});
 
   /// Реальная задержка через узел (мс) или -1.
   static Future<int> measure(String config, String url) async {
+    if (win) return WinCore.measure(config, url);
     try {
       return (await _core.invokeMethod<int>('measure', {'config': config, 'url': url})) ?? -1;
     } catch (_) {
@@ -208,10 +255,12 @@ class Native {
   }
 
   /// Отдельный экземпляр ядра для замера скорости узла; вернёт номер или null.
-  static Future<int?> probeStart(String config) => _core.invokeMethod<int>('probeStart', {'config': config});
-  static Future<void> probeStop(int id) => _core.invokeMethod('probeStop', {'id': id});
+  static Future<int?> probeStart(String config) =>
+      win ? WinCore.probeStart(config) : _core.invokeMethod<int>('probeStart', {'config': config});
+  static Future<void> probeStop(int id) => win ? WinCore.probeStop(id) : _core.invokeMethod('probeStop', {'id': id});
 
   static Future<List<InstalledApp>> apps() async {
+    if (win) return const [];
     final list = (await _core.invokeMethod<List>('apps')) ?? const [];
     return list.whereType<Map>().map((m) => InstalledApp(m['package'] as String, m['label'] as String)).toList();
   }
@@ -219,10 +268,11 @@ class Native {
   static Future<Uint8List?> appIcon(String package) =>
       _core.invokeMethod<Uint8List>('appIcon', {'package': package});
 
-  static Future<bool> batteryRestricted() async => (await _core.invokeMethod<bool>('batteryRestricted')) ?? false;
+  static Future<bool> batteryRestricted() async => win ? false : (await _core.invokeMethod<bool>('batteryRestricted')) ?? false;
 
   /// QR-код текста в PNG; null — не поместился.
   static Future<Uint8List?> qr(String text, {int size = 720}) async {
+    if (win) return WinCore.qr(text);
     try {
       return await _core.invokeMethod<Uint8List>('qr', {'text': text, 'size': size});
     } catch (_) {
@@ -231,8 +281,9 @@ class Native {
   }
 
   /// Скрытые экраны настроек сети: [{pkg, cls, title, status, reason}].
-  static Future<List<Map>> hiddenScreens() async =>
-      ((await _core.invokeMethod<List>('hiddenScreens')) ?? const []).whereType<Map>().toList();
+  static Future<List<Map>> hiddenScreens() async => win
+      ? const []
+      : ((await _core.invokeMethod<List>('hiddenScreens')) ?? const []).whereType<Map>().toList();
 
   /// Открыть скрытый экран; null — открылся, иначе текст ошибки.
   static Future<String?> openHidden(String pkg, String cls) =>
@@ -242,21 +293,25 @@ class Native {
   static Future<String?> scanQr() => _core.invokeMethod<String>('scanQr');
 
   /// Системное «Поделиться» с текстом.
-  static Future<void> share(String text, {String title = 'Поделиться'}) =>
-      _core.invokeMethod('share', {'text': text, 'title': title});
+  static Future<void> share(String text, {String title = 'Поделиться'}) => win
+      ? Clipboard.setData(ClipboardData(text: text))
+      : _core.invokeMethod('share', {'text': text, 'title': title});
 
   static Future<void> openBattery() => _core.invokeMethod('openBattery');
   static Future<void> openAutostart() => _core.invokeMethod('openAutostart');
   static Future<void> openVpnSettings() => _core.invokeMethod('openVpnSettings');
-  static Future<void> openUrl(String url) => _core.invokeMethod('openUrl', {'url': url});
+  static Future<void> openUrl(String url) => win ? WinCore.openUrl(url) : _core.invokeMethod('openUrl', {'url': url});
 
   /// null — APK наш, подпись и версия совпали; иначе текст ошибки.
-  static Future<String?> verifyApk(String path, String sha256, int versionCode) => _core.invokeMethod<String>(
+  static Future<String?> verifyApk(String path, String sha256, int versionCode) => win
+      ? WinCore.verifyInstaller(path, sha256)
+      : _core.invokeMethod<String>(
         'verifyApk',
         {'path': path, 'sha256': sha256, 'versionCode': versionCode},
       );
 
   /// false — нужно разрешение «Установка неизвестных приложений», экран уже открыт.
-  static Future<bool> installApk(String path) async =>
-      (await _core.invokeMethod<bool>('installApk', {'path': path})) ?? false;
+  static Future<bool> installApk(String path) async => win
+      ? WinCore.runInstaller(path)
+      : (await _core.invokeMethod<bool>('installApk', {'path': path})) ?? false;
 }
