@@ -204,7 +204,7 @@ class BackdropPainter extends CustomPainter {
       for (double x = -10; x <= w + 10; x += 10) {
         final y = h * base +
             h * amp * sin(x / w * 2.6 * pi + _a * speed + i) +
-            h * 0.03 * sin(x / w * 7 * pi - _a * speed * 2);
+            h * 0.015 * sin(x / w * 5 * pi - _a * speed * 2);
         top.add(Offset(x, y));
       }
       final thick = h * (0.16 + 0.05 * sin(_a * 2 + i));
@@ -217,7 +217,7 @@ class BackdropPainter extends CustomPainter {
       }
       path.close();
       final bounds = Rect.fromLTWH(0, h * (base - amp - 0.05), w, h * (2 * amp + 0.35));
-      final a = on ? 0.42 : 0.32;
+      final a = on ? 0.34 : 0.26;
       canvas.drawPath(
         path,
         Paint()
@@ -263,7 +263,7 @@ class BackdropPainter extends CustomPainter {
   /// Солнце медленно садится и встаёт, вокруг — ореол.
   void _sun(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
-    final y = h * (0.62 + 0.06 * sin(_a));
+    final y = h * (0.50 + 0.05 * sin(_a));
     final c = Offset(w * 0.5, y);
     final glow = w * 0.9;
     canvas.drawCircle(
@@ -285,7 +285,7 @@ class BackdropPainter extends CustomPainter {
         ).createShader(Rect.fromCircle(center: c, radius: r)),
     );
     // Горизонт: полосы «отражения» под солнцем.
-    final horizon = h * 0.72;
+    final horizon = h * 0.60;
     canvas.drawRect(
       Rect.fromLTWH(0, horizon, w, h - horizon),
       Paint()
@@ -306,7 +306,7 @@ class BackdropPainter extends CustomPainter {
 
   void _clouds(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
-    final paint = Paint()..color = p.accent2.withValues(alpha: 0.10);
+    final paint = Paint()..color = p.accent2.withValues(alpha: 0.06);
     for (var i = 0; i < 4; i++) {
       final x = ((t * (0.6 + i * 0.25) + i * 0.3) % 1.3 - 0.15) * w;
       final y = h * (0.12 + i * 0.09);
