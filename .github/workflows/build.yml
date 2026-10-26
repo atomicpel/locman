@@ -93,6 +93,7 @@ jobs:
         run: |
           set -o pipefail
           flutter test 2>&1 | tee report/tests.txt
+          mkdir -p report/look && cp build/look/*.png report/look/ 2>/dev/null || true
 
       - name: Ключ подписи
         env:
