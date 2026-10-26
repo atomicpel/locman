@@ -29,9 +29,7 @@ class HomeScreen extends StatelessWidget {
     final elapsed = on && s.connectedAt != null ? (s.now == 0 ? 0 : s.now - s.connectedAt!) : 0;
     final island = p.skin == Skin.island;
 
-    final content = ListView(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      children: [
+    final items = <Widget>[
         if (s.update != null) ...[_UpdateBanner(s: s), const SizedBox(height: 12)],
         if (island) ...[
           Center(child: _LiveIsland(s: s, node: node)),
@@ -39,7 +37,7 @@ class HomeScreen extends StatelessWidget {
         ],
         const SizedBox(height: 8),
         Center(
-          child: island ? _IslandPower(s: s, node: node) : Orb(phase: s.phase, onTap: s.togglePower),
+          child: island ? _IslandPower(s: s, node: node) : Orb(phase: s.phase, onTap: s.togglePower, live: s.liveBackground),
         ),
         if (!island) ...[
           const SizedBox(height: 20),
@@ -182,17 +180,11 @@ class HomeScreen extends StatelessWidget {
             ],
           ),
         ),
-        if (s.directRu && s.phase == Phase.on) ...[
-          const SizedBox(height: 8),
-          Text(
-            'Изменение «Свои сервисы напрямую» применится при следующем подключении.',
-            textAlign: TextAlign.center,
-            style: p.text(12, color: p.muted),
-          ),
-        ],
-      ],
+    ];
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [for (final (i, w) in items.indexed) Appear(index: i, child: w)],
     );
-    return p.skin == Skin.dot ? DotGrid(child: content) : content;
   }
 }
 

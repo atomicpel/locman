@@ -18,7 +18,7 @@ import 'engine/native.dart';
 import 'engine/net.dart';
 import 'engine/win_core.dart';
 
-enum Skin { glass, paper, dot, signal, island }
+enum Skin { glass, aurora, cosmos, ocean, sunset, sakura, island, paper, signal, dot }
 
 enum Phase { off, seek, on, fail }
 
@@ -27,11 +27,16 @@ enum AppTab { home, nodes, sources, more }
 enum SettingsPage { look, link, apps, safe, probe, radio, about }
 
 const skinMeta = {
-  Skin.glass: ('Стекло', 'Прозрачные капсулы и холодный свет', false),
-  Skin.paper: ('Чернила', 'Бумага, тушь и засечки', false),
-  Skin.dot: ('Точка', 'Монохром и красная точка', true),
-  Skin.signal: ('Сигнал', 'Плоский тёмный сигнал', true),
-  Skin.island: ('Остров', 'Крупная плитка и живой остров', false),
+  Skin.glass: ('Стекло', 'Прозрачные капсулы и плывущие пятна света', null),
+  Skin.aurora: ('Сияние', 'Северное сияние переливается за карточками', 'dark'),
+  Skin.cosmos: ('Космос', 'Мерцающие звёзды и падающие метеоры', 'dark'),
+  Skin.ocean: ('Океан', 'Волны катятся внизу экрана', null),
+  Skin.sunset: ('Закат', 'Тёплое небо и медленно садящееся солнце', 'dark'),
+  Skin.sakura: ('Сакура', 'Светлая тема, падают лепестки', 'light'),
+  Skin.island: ('Остров', 'Крупная плитка, тёплые блики', null),
+  Skin.paper: ('Чернила', 'Бумага, тушь и засечки', null),
+  Skin.signal: ('Сигнал', 'Тёмный экран и луч радара', 'dark'),
+  Skin.dot: ('Точка', 'Монохром, точки и красный акцент', 'dark'),
 };
 
 /// auto — сами смотрим, allow — БС (белые списки), block — ЧС (обычные блокировки).
@@ -144,6 +149,9 @@ class AppState extends ChangeNotifier {
   bool onboarded = false;
   bool publicOn = true;
   Skin skin = Skin.glass;
+
+  /// Живой фон и анимации оформления (выключить — бережнее к батарее).
+  bool liveBackground = true;
   String scheme = 'dark';
   String mode = 'auto';
   String probe = 'normal';
@@ -480,6 +488,7 @@ class AppState extends ChangeNotifier {
     onboarded = pick('onboarded', false);
     publicOn = pick('publicOn', true);
     skin = Skin.values.firstWhere((s) => s.name == j['skin'], orElse: () => Skin.glass);
+    liveBackground = j['liveBackground'] != false;
     scheme = pick('scheme', 'dark');
     mode = modeMeta.containsKey(j['mode']) ? j['mode'] as String : 'auto';
     probe = probeMeta.containsKey(j['probe']) ? j['probe'] as String : 'normal';
@@ -541,6 +550,7 @@ class AppState extends ChangeNotifier {
         'onboarded': onboarded,
         'publicOn': publicOn,
         'skin': skin.name,
+        'liveBackground': liveBackground,
         'scheme': scheme,
         'mode': mode,
         'probe': probe,
@@ -633,6 +643,7 @@ class AppState extends ChangeNotifier {
   }
 
   void setSkin(Skin s) => _set(() => skin = s);
+  void setLiveBackground(bool v) => _set(() => liveBackground = v);
   void setScheme(String s) => _set(() => scheme = s);
   void setMode(String m) {
     _set(() => mode = m);

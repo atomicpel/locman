@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../core/ru.dart';
 import '../engine/native.dart';
 import '../state.dart';
+import 'backdrop.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -91,41 +92,50 @@ class _LookPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = PaletteScope.of(context);
-    final locked = skinMeta[s.skin]!.$3;
+    final lock = skinMeta[s.skin]!.$3;
+    final system = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+    final wantDark = s.scheme == 'system' ? system : s.scheme == 'dark';
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       children: [
-        for (final skin in Skin.values) ...[
-          Pressable(
-            onTap: () => s.setSkin(skin),
-            label: skinMeta[skin]!.$1,
-            child: Panel(
-              highlight: s.skin == skin,
-              color: s.skin == skin ? p.surface : p.surface2,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(skinMeta[skin]!.$1, style: p.text(16, weight: FontWeight.w500)),
-                        Text(skinMeta[skin]!.$2, style: p.text(14, color: p.muted)),
-                      ],
-                    ),
-                  ),
-                  if (s.skin == skin) Icon(Icons.check_rounded, color: p.accent),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
+        Text('Облик — ${Skin.values.length} вариантов, у каждого свой живой фон.', style: p.text(14, color: p.muted)),
         const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 0.92,
+          children: [
+            for (final (i, skin) in Skin.values.indexed)
+              Appear(
+                index: i,
+                child: _SkinTile(
+                  skin: skin,
+                  selected: s.skin == skin,
+                  palette: Palette.of(
+                    skin,
+                    skinMeta[skin]!.$3 != null ? skinMeta[skin]!.$3 == 'dark' : wantDark,
+                  ),
+                  onTap: () => s.setSkin(skin),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        SettingRow(
+          title: 'Живой фон и анимации',
+          line: 'Фон облика двигается, кнопка «дышит» и расходится волнами. Выключите — всё замрёт, '
+              'так бережнее к батарее. При системном «Убрать анимации» фон замирает сам.',
+          control: PillSwitch(on: s.liveBackground, onChanged: s.setLiveBackground),
+        ),
+        const SizedBox(height: 16),
         const SectionTitle('Тема'),
         const SizedBox(height: 8),
-        if (locked)
-          Text('У этого облика только тёмная тема.', style: p.text(14, color: p.muted))
+        if (lock != null)
+          Text(lock == 'dark' ? 'У этого облика только тёмная тема.' : 'У этого облика только светлая тема.',
+              style: p.text(14, color: p.muted))
         else
           Segment<String>(
             value: s.scheme,
@@ -133,6 +143,94 @@ class _LookPage extends StatelessWidget {
             options: const [('dark', 'Тёмная'), ('light', 'Светлая'), ('system', 'Система')],
           ),
       ],
+    );
+  }
+}
+
+/// Плитка облика: превью его фона с кнопкой, название и описание.
+class _SkinTile extends StatelessWidget {
+  const _SkinTile({required this.skin, required this.selected, required this.palette, required this.onTap});
+  final Skin skin;
+  final bool selected;
+  final Palette palette;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    final q = palette;
+    return Pressable(
+      onTap: onTap,
+      label: skinMeta[skin]!.$1,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: selected ? p.accent : p.border, width: selected ? 2 : 1),
+          boxShadow: selected ? [BoxShadow(color: p.accent.withValues(alpha: 0.30), blurRadius: 18)] : null,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(17),
+          child: Stack(
+            children: [
+              Positioned.fill(child: CustomPaint(painter: BackdropPainter(q, 0.27, on: selected))),
+              // Мини-кнопка облика
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 22,
+                child: Center(
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: q.accentGradient,
+                      boxShadow: [BoxShadow(color: q.accent.withValues(alpha: 0.45), blurRadius: 16)],
+                    ),
+                    child: Icon(Icons.power_settings_new_rounded, size: 22, color: q.accentFg),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 10,
+                right: 10,
+                bottom: 10,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  decoration: BoxDecoration(
+                    color: Color.alphaBlend(q.surface, q.bg).withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(q.rCard.clamp(6, 14)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(skinMeta[skin]!.$1,
+                                maxLines: 1, overflow: TextOverflow.ellipsis, style: q.text(14, weight: FontWeight.w600, display: true)),
+                            Text(skinMeta[skin]!.$2,
+                                maxLines: 2, overflow: TextOverflow.ellipsis, style: q.text(11, color: q.muted).copyWith(height: 1.25)),
+                          ],
+                        ),
+                      ),
+                      AnimatedScale(
+                        scale: selected ? 1 : 0,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOutBack,
+                        child: Icon(Icons.check_circle_rounded, size: 20, color: q.accent),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

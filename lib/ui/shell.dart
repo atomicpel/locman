@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../state.dart';
+import 'backdrop.dart';
 import 'home.dart';
 import 'more.dart';
 import 'nodes.dart';
@@ -58,15 +59,20 @@ class _LocmanAppState extends State<LocmanApp> with WidgetsBindingObserver {
       builder: (context, _) {
         final s = widget.state;
         final system = PlatformDispatcher.instance.platformBrightness == Brightness.dark;
-        final locked = skinMeta[s.skin]!.$3;
-        final dark = locked || (s.scheme == 'system' ? system : s.scheme == 'dark');
-        final p = Palette.of(s.skin, dark);
+        final lock = skinMeta[s.skin]!.$3;
+        final dark = lock != null ? lock == 'dark' : (s.scheme == 'system' ? system : s.scheme == 'dark');
+        final target = Palette.of(s.skin, dark);
         final overlay = (dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
           statusBarColor: Colors.transparent,
           systemNavigationBarColor: Colors.transparent,
           systemNavigationBarContrastEnforced: false,
         );
-        return RepaintBoundary(
+        // Смена облика — цвета плавно перетекают.
+        return TweenAnimationBuilder<Palette>(
+          tween: PaletteTween(end: target),
+          duration: const Duration(milliseconds: 550),
+          curve: Curves.easeInOutCubic,
+          builder: (context, p, _) => RepaintBoundary(
           key: _boundary,
           child: PaletteScope(
           palette: p,
@@ -87,6 +93,7 @@ class _LocmanAppState extends State<LocmanApp> with WidgetsBindingObserver {
                               : _Onboarding(s: s),
             ),
             builder: (context, child) => PaletteScope(palette: p, child: child!),
+          ),
           ),
           ),
         );
@@ -158,6 +165,7 @@ class _Shell extends StatelessWidget {
         backgroundColor: p.bg,
         body: Stack(
           children: [
+            Positioned.fill(child: Backdrop(live: s.liveBackground, phase: s.phase)),
             SafeArea(
               bottom: false,
               child: Column(
@@ -165,7 +173,16 @@ class _Shell extends StatelessWidget {
                   _Header(s: s),
                   Expanded(
                     child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 180),
+                      duration: const Duration(milliseconds: 320),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, a) => FadeTransition(
+                        opacity: a,
+                        child: SlideTransition(
+                          position: Tween(begin: const Offset(0, 0.025), end: Offset.zero).animate(a),
+                          child: ScaleTransition(scale: Tween(begin: 0.985, end: 1.0).animate(a), child: child),
+                        ),
+                      ),
                       child: KeyedSubtree(key: ValueKey('${s.tab}/${s.settingsPage}'), child: body),
                     ),
                   ),
@@ -449,7 +466,7 @@ class _TabBar extends StatelessWidget {
     ];
     final bar = Container(
       decoration: BoxDecoration(
-        color: p.skin == Skin.glass ? p.surface.withValues(alpha: 0.78) : p.bg,
+        color: Color.alphaBlend(p.surface.withValues(alpha: 0.92), p.bg),
         border: Border(top: BorderSide(color: p.border)),
       ),
       padding: EdgeInsets.fromLTRB(8, 4, 8, 8 + MediaQuery.of(context).padding.bottom),
@@ -465,13 +482,38 @@ class _TabBar extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   onTap: () => s.setTab(tab),
                   child: SizedBox(
-                    height: 56,
+                    height: 58,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(icon, size: 20, color: s.tab == tab ? p.accent : p.muted),
+                        // Выбранная вкладка — капсула с градиентом, иконка чуть подпрыгивает.
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 320),
+                          curve: Curves.easeOutBack,
+                          width: s.tab == tab ? 56 : 32,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(15),
+                            gradient: s.tab == tab
+                                ? LinearGradient(colors: [
+                                    p.accent.withValues(alpha: 0.22),
+                                    p.accent2.withValues(alpha: 0.22),
+                                  ])
+                                : null,
+                          ),
+                          child: AnimatedScale(
+                            scale: s.tab == tab ? 1.12 : 1,
+                            duration: const Duration(milliseconds: 320),
+                            curve: Curves.easeOutBack,
+                            child: Icon(icon, size: 20, color: s.tab == tab ? p.accent : p.muted),
+                          ),
+                        ),
                         const SizedBox(height: 2),
-                        Text(label, style: p.text(12, color: s.tab == tab ? p.accent : p.muted)),
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 250),
+                          style: p.text(12, weight: s.tab == tab ? FontWeight.w600 : FontWeight.w400, color: s.tab == tab ? p.accent : p.muted),
+                          child: Text(label),
+                        ),
                       ],
                     ),
                   ),
@@ -481,7 +523,7 @@ class _TabBar extends StatelessWidget {
         ],
       ),
     );
-    if (p.skin != Skin.glass) return bar;
+    if (p.skin != Skin.glass && p.skin != Skin.aurora && p.skin != Skin.cosmos) return bar;
     return ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16), child: bar));
   }
 }
@@ -495,7 +537,10 @@ class _Onboarding extends StatelessWidget {
     final p = PaletteScope.of(context);
     return Scaffold(
       backgroundColor: p.bg,
-      body: SafeArea(
+      body: Stack(
+        children: [
+          Positioned.fill(child: Backdrop(live: s.liveBackground)),
+          SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
           child: Column(
@@ -504,7 +549,7 @@ class _Onboarding extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    IgnorePointer(child: Orb(phase: Phase.off, onTap: () {})),
+                    IgnorePointer(child: Orb(phase: Phase.off, onTap: () {}, live: s.liveBackground)),
                     const SizedBox(height: 24),
                     Text('Лоцман', style: p.text(36, weight: FontWeight.w600, display: true)),
                     const SizedBox(height: 8),
@@ -541,6 +586,8 @@ class _Onboarding extends StatelessWidget {
           ),
         ),
       ),
+        ],
+      ),
     );
   }
 }
@@ -556,7 +603,9 @@ class _LegalGate extends StatelessWidget {
     final again = s.legalAccepted > 0;
     return Scaffold(
       backgroundColor: p.bg,
-      body: SafeArea(
+      body: Stack(children: [
+        Positioned.fill(child: Backdrop(live: s.liveBackground)),
+        SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
           child: Column(
@@ -613,6 +662,7 @@ class _LegalGate extends StatelessWidget {
           ),
         ),
       ),
+      ]),
     );
   }
 }

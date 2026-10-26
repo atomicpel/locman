@@ -271,7 +271,9 @@ class PillButton extends StatelessWidget {
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: primary ? p.accent : p.surface,
+            color: primary ? null : p.surface,
+            gradient: primary ? p.accentGradient : null,
+            boxShadow: primary && onTap != null ? [BoxShadow(color: p.accent.withValues(alpha: 0.28), blurRadius: 14, offset: const Offset(0, 4))] : null,
             borderRadius: BorderRadius.circular(p.rPill),
             border: primary ? null : Border.all(color: p.border),
           ),
@@ -339,3 +341,24 @@ class SectionTitle extends StatelessWidget {
     );
   }
 }
+
+/// Появление при открытии экрана: снизу вверх и из прозрачности, по очереди.
+class Appear extends StatelessWidget {
+  const Appear({super.key, required this.index, required this.child});
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.maybeDisableAnimationsOf(context) == true) return child;
+    final start = (index < 8 ? index : 8) * 0.06;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 750),
+      curve: Interval(start, 1, curve: Curves.easeOutCubic),
+      builder: (_, v, c) => Opacity(opacity: v, child: Transform.translate(offset: Offset(0, (1 - v) * 16), child: c)),
+      child: child,
+    );
+  }
+}
+
