@@ -238,6 +238,19 @@ class MainActivity : FlutterActivity() {
                 result.success(mapOf("level" to level, "charging" to bm.isCharging))
             }
 
+            "hiddenScreens" -> async(result) { HiddenScreens.list(this) }
+
+            "openHidden" -> {
+                val pkg = call.argument<String>("pkg")!!
+                val cls = call.argument<String>("cls")!!
+                // Открываем только экраны из нашего списка.
+                if (HiddenScreens.candidates.none { it.pkg == pkg && it.cls == cls }) {
+                    result.success("неизвестный экран")
+                } else {
+                    result.success(HiddenScreens.open(this, pkg, cls))
+                }
+            }
+
             "scanQr" -> {
                 pendingScan?.success(null)
                 pendingScan = result

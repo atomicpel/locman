@@ -230,6 +230,14 @@ class Native {
     }
   }
 
+  /// Скрытые экраны настроек сети: [{pkg, cls, title, status, reason}].
+  static Future<List<Map>> hiddenScreens() async =>
+      ((await _core.invokeMethod<List>('hiddenScreens')) ?? const []).whereType<Map>().toList();
+
+  /// Открыть скрытый экран; null — открылся, иначе текст ошибки.
+  static Future<String?> openHidden(String pkg, String cls) =>
+      _core.invokeMethod<String>('openHidden', {'pkg': pkg, 'cls': cls});
+
   /// Сканер QR-кода внутри приложения: текст кода или null (закрыли). Ошибка 'camera' — нет разрешения.
   static Future<String?> scanQr() => _core.invokeMethod<String>('scanQr');
 

@@ -22,7 +22,7 @@ enum Phase { off, seek, on, fail }
 
 enum AppTab { home, nodes, sources, more }
 
-enum SettingsPage { look, link, apps, safe, probe, about }
+enum SettingsPage { look, link, apps, safe, probe, radio, about }
 
 const skinMeta = {
   Skin.glass: ('Стекло', 'Прозрачные капсулы и холодный свет', false),

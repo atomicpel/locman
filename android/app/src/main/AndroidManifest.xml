@@ -13,6 +13,10 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <queries>
+        <!-- Скрытые экраны настроек сети: только эти пакеты, без QUERY_ALL_PACKAGES -->
+        <package android:name="com.android.phone" />
+        <package android:name="com.android.settings" />
+        <package android:name="com.mediatek.engineermode" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

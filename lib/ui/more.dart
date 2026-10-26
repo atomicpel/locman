@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/ru.dart';
 import '../engine/native.dart';
@@ -14,6 +15,7 @@ String settingsTitle(SettingsPage page) => switch (page) {
       SettingsPage.apps => 'Мимо узла',
       SettingsPage.safe => 'Безопасность',
       SettingsPage.probe => 'Проверка узлов',
+      SettingsPage.radio => 'Скрытые настройки сети',
       SettingsPage.about => 'О клиенте',
     };
 
@@ -29,6 +31,7 @@ class MoreScreen extends StatelessWidget {
       SettingsPage.apps => _AppsPage(s: s),
       SettingsPage.safe => _SafePage(s: s),
       SettingsPage.probe => _ProbePage(s: s),
+      SettingsPage.radio => _RadioPage(s: s),
       SettingsPage.about => _AboutPage(s: s),
       null => _MoreIndex(s: s),
     };
@@ -48,6 +51,7 @@ class _MoreIndex extends StatelessWidget {
       (SettingsPage.apps, 'Мимо узла', s.excludes.isEmpty ? 'Приложения без туннеля' : 'Выбрано: ${s.excludes.length}'),
       (SettingsPage.safe, 'Безопасность', 'DNS ${dnsMeta[s.dns]} и скрытие слабых узлов'),
       (SettingsPage.probe, 'Проверка узлов', probeMeta[s.probe]!.$1),
+      (SettingsPage.radio, 'Скрытые настройки сети', 'Экран *#*#4636#*#*: тип сети, LTE/5G'),
       (SettingsPage.about, 'О клиенте', s.update != null ? 'Доступна версия ${s.update!.versionName}' : 'Версия, обновления, журнал'),
     ];
     return ListView(
@@ -677,3 +681,188 @@ class _AboutPage extends StatelessWidget {
     return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }
 }
+
+/// Скрытые экраны настроек сети: «Информация о телефоне» (*#*#4636#*#*) и инженерное меню MediaTek.
+class _RadioPage extends StatefulWidget {
+  const _RadioPage({required this.s});
+  final AppState s;
+
+  @override
+  State<_RadioPage> createState() => _RadioPageState();
+}
+
+class _RadioPageState extends State<_RadioPage> with WidgetsBindingObserver {
+  static const adb = 'adb shell am start -n com.android.phone/com.android.phone.settings.RadioInfo';
+  List<Map>? _list;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final l = await Native.hiddenScreens();
+      if (mounted) setState(() => _list = l);
+    } catch (e) {
+      if (mounted) setState(() => _list = const []);
+    }
+  }
+
+  Future<void> _open(Map c) async {
+    final err = await Native.openHidden(c['pkg'] as String, c['cls'] as String);
+    if (!mounted) return;
+    setState(() => _error = err == null ? null : '${c['title']}: $err');
+  }
+
+  /// Пробуем по порядку: сначала доступные, потом закрытые (иногда прошивка всё же пускает).
+  Future<void> _openFirst() async {
+    final list = _list ?? const [];
+    final order = [
+      ...list.where((c) => c['status'] == 'available'),
+      ...list.where((c) => c['status'] == 'closed'),
+    ];
+    final errors = <String>[];
+    for (final c in order) {
+      final err = await Native.openHidden(c['pkg'] as String, c['cls'] as String);
+      if (err == null) {
+        if (mounted) setState(() => _error = null);
+        return;
+      }
+      errors.add('${c['title']}: $err');
+    }
+    if (mounted) {
+      setState(() => _error = errors.isEmpty ? 'На этом телефоне таких экранов нет' : errors.join('\n'));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    final list = _list;
+    final anyOpen = list?.any((c) => c['status'] == 'available') ?? false;
+    const ok = Color(0xFF34C759);
+    const warn = Color(0xFFFFB020);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        Text(
+          'Системный экран «Информация о телефоне» — тот, что открывает код *#*#4636#*#*. В нём можно выбрать '
+          'предпочтительный тип сети (например, только LTE или LTE/NR) и посмотреть сигнал. На realme, Xiaomi/HyperOS '
+          'и Samsung код часто не срабатывает, а экран в прошивке есть — «Лоцман» откроет его напрямую.',
+          style: p.text(14, color: p.muted),
+        ),
+        const SizedBox(height: 16),
+        PillButton(
+          label: 'Открыть',
+          icon: Icons.settings_input_antenna_rounded,
+          primary: true,
+          onTap: list == null ? null : _openFirst,
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(_error!, style: p.text(13, color: p.danger)),
+        ],
+        const SizedBox(height: 20),
+        const SectionTitle('Что есть на этом телефоне'),
+        const SizedBox(height: 8),
+        if (list == null)
+          Center(child: Padding(padding: const EdgeInsets.all(16), child: CircularProgressIndicator(color: p.accent)))
+        else
+          for (final c in list) ...[
+            Pressable(
+              onTap: () => _open(c),
+              label: c['title'] as String,
+              child: Panel(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 5),
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: switch (c['status']) {
+                            'available' => ok,
+                            'closed' => warn,
+                            _ => p.muted,
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(c['title'] as String, style: p.text(15, weight: FontWeight.w500)),
+                          Text(
+                            switch (c['status']) {
+                              'available' => 'Доступен — нажмите, чтобы открыть',
+                              'closed' => 'Есть, но закрыт${c['reason'] == null ? '' : ': ${c['reason']}'}',
+                              _ => 'Отсутствует в прошивке',
+                            },
+                            style: p.text(13, color: p.muted),
+                          ),
+                          Text('${c['pkg']}/${c['cls']}', style: p.text(11, color: p.muted)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        if (list != null && !anyOpen) ...[
+          const SizedBox(height: 12),
+          const SectionTitle('Открыть с компьютера'),
+          const SizedBox(height: 8),
+          Text(
+            'Если прошивка не пускает приложения, экран можно открыть через ADB: включите отладку по USB '
+            'в «Для разработчиков», подключите телефон к компьютеру и выполните:',
+            style: p.text(14, color: p.muted),
+          ),
+          const SizedBox(height: 8),
+          Panel(
+            padding: const EdgeInsets.all(12),
+            child: SelectableText(adb, style: TextStyle(fontFamily: 'monospace', fontSize: 13, color: p.fg)),
+          ),
+          const SizedBox(height: 8),
+          PillButton(
+            label: 'Скопировать',
+            icon: Icons.copy_rounded,
+            onTap: () {
+              Clipboard.setData(const ClipboardData(text: adb));
+              widget.s.flash('Команда скопирована');
+            },
+          ),
+        ],
+        const SizedBox(height: 16),
+        Text(
+          'Меняйте тип сети осторожно: неподходящий режим может оставить телефон без связи. '
+          'Вернуть — на том же экране. «Лоцман» сам ничего в этих экранах не меняет.',
+          style: p.text(13, color: p.muted),
+        ),
+      ],
+    );
+  }
+}
+
