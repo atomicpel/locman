@@ -204,7 +204,7 @@ void main() {
     expect(inbounds.first['protocol'], 'tun');
     expect(c.containsKey('stats'), isTrue);
     final dnsRule = ((c['routing'] as Map)['rules'] as List).cast<Map>().first;
-    expect(dnsRule['inboundTag'], ['socks', 'tun']);
+    expect(dnsRule['inboundTag'], ['socks', 'tun', 'syssocks']);
   });
 
   test('найденный IP сохраняет домен в SNI и Host', () {

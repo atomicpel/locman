@@ -178,6 +178,9 @@ jobs:
     name: Windows (x64)
     runs-on: windows-latest
     timeout-minutes: 60
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
     defaults:
       run:
         shell: bash
@@ -217,7 +220,7 @@ jobs:
         run: |
           flutter create --org app --project-name locman --platforms windows .
           rm -f test/widget_test.dart
-          python tools/patch_windows.py > report/windows-patch.txt
+          python tools/patch_windows.py > report/windows-patch.txt 2>&1 || { cat report/windows-patch.txt; exit 1; }
           cp catalog/catalog.json assets/catalog.json
           python tools/changelog.py "$VERSION"
 
