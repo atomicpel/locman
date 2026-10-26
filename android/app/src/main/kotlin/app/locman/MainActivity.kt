@@ -27,7 +27,10 @@ class MainActivity : FlutterActivity() {
     private companion object {
         const val REQ_VPN = 41
         const val REQ_NOTIFY = 42
+        const val REQ_SCAN = 43
     }
+
+    private var pendingScan: MethodChannel.Result? = null
 
     private val main = Handler(Looper.getMainLooper())
     private val background = Executors.newFixedThreadPool(48) { r -> Thread(r, "locman-call").apply { isDaemon = true } }
@@ -235,6 +238,17 @@ class MainActivity : FlutterActivity() {
                 result.success(mapOf("level" to level, "charging" to bm.isCharging))
             }
 
+            "scanQr" -> {
+                pendingScan?.success(null)
+                pendingScan = result
+                try {
+                    startActivityForResult(Intent(this, ScanActivity::class.java), REQ_SCAN)
+                } catch (e: Exception) {
+                    pendingScan = null
+                    result.error("scan", e.message, null)
+                }
+            }
+
             "qr" -> {
                 val text = call.argument<String>("text")!!
                 val size = call.argument<Int>("size") ?: 720
@@ -329,6 +343,16 @@ class MainActivity : FlutterActivity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_SCAN) {
+            val r = pendingScan
+            pendingScan = null
+            when {
+                resultCode == RESULT_OK -> r?.success(data?.getStringExtra(ScanActivity.EXTRA_TEXT))
+                data?.getStringExtra("error") == "camera" -> r?.error("camera", "нет разрешения на камеру", null)
+                else -> r?.success(null)
+            }
+            return
+        }
         if (requestCode == REQ_VPN) {
             val r = pendingPrepare
             pendingPrepare = null

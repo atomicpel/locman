@@ -112,6 +112,11 @@ dependencies {
     implementation("androidx.core:core:1.13.1")
     // QR-код для «Поделиться подписками»
     implementation("com.google.zxing:core:3.5.3")
+    // Сканер QR-кода: камера
+    implementation("androidx.activity:activity:1.9.3")
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-view:1.3.4")
 }
 """
 

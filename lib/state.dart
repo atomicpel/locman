@@ -613,7 +613,7 @@ class AppState extends ChangeNotifier {
   // ---------- Условия и политика ----------
 
   /// Номер текущей редакции условий использования и политики конфиденциальности.
-  static const legalRevision = 1;
+  static const legalRevision = 2;
 
   bool get needsLegal => legalAccepted < legalRevision;
 
@@ -938,8 +938,26 @@ class AppState extends ChangeNotifier {
     final urls = <String>[];
     final keyLines = <String>[];
     var crypt = 0;
-    final tokens = RegExp(r'[A-Za-z][A-Za-z0-9+.-]*://[^\s"<>]+').allMatches(input).map((m) => m.group(0)!);
     final expanded = <String>[];
+    // Сжатый набор из «Поделиться своими». Мессенджеры и сканеры любят резать длинную ссылку
+    // переносами строк или терять её начало, поэтому берём данные после «data=» вместе с переносами,
+    // а голый набор узнаём по началу gzip в base64 («H4sI»).
+    var rest = input.replaceAllMapped(
+      RegExp(r'(?:locman://import\?)?data=([A-Za-z0-9_\-=\s]{16,})|\bH4sI[A-Za-z0-9_\-=\s]{12,}'),
+      (m) {
+        // Хвост совпадения может захватить посторонние латинские слова — отрезаем их по одному.
+        final parts = (m.group(1) ?? m.group(0)!).trim().split(RegExp(r'\s+'));
+        for (var k = parts.length; k > 0; k--) {
+          final lines = unpackShare(parts.take(k).join());
+          if (lines != null && lines.isNotEmpty) {
+            expanded.addAll(lines);
+            return ' ${parts.skip(k).join(' ')} ';
+          }
+        }
+        return m.group(0)!;
+      },
+    );
+    final tokens = RegExp(r'[A-Za-z][A-Za-z0-9+.-]*://[^\s"<>]+').allMatches(rest).map((m) => m.group(0)!);
     for (var t in tokens) {
       t = t.replaceAll(RegExp(r'[),.;]+$'), '');
       final lower = t.toLowerCase();
@@ -970,7 +988,8 @@ class AppState extends ChangeNotifier {
     }
     // Не нашли схем — может, это base64-подписка, вставленная целиком.
     if (urls.isEmpty && keyLines.isEmpty && crypt == 0) {
-      final decoded = decodeBase64(input);
+      rest = rest.trim();
+      final decoded = rest.isEmpty ? null : decodeBase64(rest);
       if (decoded != null && decoded.contains('://')) keyLines.addAll(decoded.split(RegExp(r'\s+')));
     }
     return (urls, keyLines, crypt);
@@ -1095,7 +1114,8 @@ class AppState extends ChangeNotifier {
   /// Обратно из data=…; null — не разобралось. Больше 1 МБ не распаковываем.
   static List<String>? unpackShare(String data) {
     try {
-      final padded = data.padRight((data.length + 3) ~/ 4 * 4, '=');
+      final clean = data.replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+      final padded = clean.padRight((clean.length + 3) ~/ 4 * 4, '=');
       final raw = gzip.decode(base64Url.decode(padded));
       if (raw.length > 1024 * 1024) return null;
       return utf8
@@ -1106,6 +1126,26 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Сканировать QR-код с другого телефона и предложить добавить всё, что в нём есть.
+  Future<void> scanImport() async {
+    String? text;
+    try {
+      text = await Native.scanQr();
+    } on PlatformException catch (e) {
+      flash(e.code == 'camera' ? 'Нужно разрешение на камеру' : 'Камера не открылась: ${e.message ?? e.code}');
+      return;
+    }
+    if (text == null || text.trim().isEmpty) return;
+    final (urls, keys, crypt) = splitImport(text);
+    final lines = [...urls, ...keys];
+    if (lines.isEmpty) {
+      flash(crypt > 0 ? 'Это зашифрованная ссылка Happ — её открывает только Happ' : 'В QR-коде нет подписок и ключей');
+      return;
+    }
+    pendingImport = lines.join('\n');
+    notifyListeners();
   }
 
   void removeMine(Source s) {

@@ -218,13 +218,22 @@ class _AddFormState extends State<_AddForm> {
           style: p.text(13),
           decoration: _decor('Каждая ссылка https://… станет отдельной подпиской, ключи vless://, vmess://, trojan://, ss://, hy2:// соберутся в один источник'),
         ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: _paste,
-            icon: Icon(Icons.content_paste_rounded, size: 16, color: p.accent),
-            label: Text('Вставить из буфера', style: p.text(14, color: p.accent)),
-          ),
+        Wrap(
+          children: [
+            TextButton.icon(
+              onPressed: _paste,
+              icon: Icon(Icons.content_paste_rounded, size: 16, color: p.accent),
+              label: Text('Вставить из буфера', style: p.text(14, color: p.accent)),
+            ),
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                widget.s.scanImport();
+              },
+              icon: Icon(Icons.qr_code_scanner_rounded, size: 16, color: p.accent),
+              label: Text('Сканировать QR', style: p.text(14, color: p.accent)),
+            ),
+          ],
         ),
         Text('Название (если источник один)', style: p.text(14)),
         const SizedBox(height: 4),
@@ -289,8 +298,8 @@ Future<void> showShareSheet(BuildContext context, AppState s) {
         ),
         const SizedBox(height: 8),
         Text(
-          'Наведите камеру другого телефона с «Лоцманом» — откроется окно «Добавить». '
-          'Если камера показывает только текст, скопируйте его и вставьте в «Источники → Добавить».',
+          'На другом телефоне откройте «Источники → Сканировать QR». Подойдёт и обычная камера: '
+          'скопируйте текст кода и вставьте в «Источники → Добавить».',
           textAlign: TextAlign.center,
           style: p.text(13, color: p.muted),
         ),

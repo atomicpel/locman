@@ -230,6 +230,9 @@ class Native {
     }
   }
 
+  /// Сканер QR-кода внутри приложения: текст кода или null (закрыли). Ошибка 'camera' — нет разрешения.
+  static Future<String?> scanQr() => _core.invokeMethod<String>('scanQr');
+
   /// Системное «Поделиться» с текстом.
   static Future<void> share(String text, {String title = 'Поделиться'}) =>
       _core.invokeMethod('share', {'text': text, 'title': title});

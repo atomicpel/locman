@@ -57,14 +57,28 @@ class SourcesScreen extends StatelessWidget {
           icon: Icons.refresh_rounded,
           onTap: s.refreshing.isNotEmpty ? null : s.refreshAll,
         ),
-        if (s.mine.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          PillButton(
-            label: 'Поделиться своими — ссылка или QR',
-            icon: Icons.qr_code_2_rounded,
-            onTap: () => showShareSheet(context, s),
-          ),
-        ],
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            if (s.mine.isNotEmpty) ...[
+              Expanded(
+                child: PillButton(
+                  label: 'Поделиться',
+                  icon: Icons.qr_code_2_rounded,
+                  onTap: () => showShareSheet(context, s),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: PillButton(
+                label: 'Сканировать QR',
+                icon: Icons.qr_code_scanner_rounded,
+                onTap: s.scanImport,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         if (s.mine.isEmpty)
           Panel(

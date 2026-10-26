@@ -296,5 +296,20 @@ void main() {
     expect(keys, [vless]);
     expect(AppState.unpackShare('мусор'), isNull);
   });
+
+  test('набор подписок узнаётся, даже если ссылку порезали переносами или потеряли начало', () {
+    final lines = ['https://a.example.com/sub/1', vless];
+    final link = AppState.packShare(lines);
+    final data = Uri.parse(link).queryParameters['data']!;
+    final wrapped = 'Подписки для «Лоцмана»:\n${link.substring(0, 40)}\n${link.substring(40, 90)} ${link.substring(90)}';
+    final (u1, k1, _) = AppState.splitImport(wrapped);
+    expect(u1, ['https://a.example.com/sub/1']);
+    expect(k1, [vless]);
+    final (u2, k2, _) = AppState.splitImport(data);
+    expect(u2, ['https://a.example.com/sub/1']);
+    expect(k2, [vless]);
+    final (u3, _, _) = AppState.splitImport('$data https://b.example.com/x');
+    expect(u3, ['https://a.example.com/sub/1', 'https://b.example.com/x']);
+  });
 }
 
