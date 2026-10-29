@@ -1,0 +1,20 @@
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\assets\catalog.json
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\assets\changelog.json
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\assets\fonts\Literata-Medium.ttf
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\assets\fonts\Literata-SemiBold.ttf
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\assets\fonts\Manrope-Bold.ttf
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\assets\fonts\Manrope-Medium.ttf
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\assets\fonts\Manrope-Regular.ttf
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\assets\fonts\Manrope-SemiBold.ttf
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\assets\legal\privacy.md
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\assets\legal\terms.md
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\fonts\MaterialIcons-Regular.otf
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\shaders\ink_sparkle.frag
+   Compressing: D:/a/locman/locman/build/windows/x64/runner/Release\data\flutter_assets\shaders\stretch_effect.frag
+   Compressing Setup program executable
+   Updating version info (Setup.exe)
+   Updating manifest (Setup.exe)
+
+
+Successful compile (18.844 sec). Resulting Setup program filename is:
+D:\a\locman\locman\dist\Locman-0.0.65-windows-x64-setup.exe

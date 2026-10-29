@@ -1,0 +1,11 @@
+total 55092
+drwxr-xr-x 1 runneradmin 197121        0 Oct 29 13:32 .
+drwxr-xr-x 1 runneradmin 197121        0 Oct 29 13:32 ..
+-rw-r--r-- 1 runneradmin 197121    35823 Oct 29 13:32 LICENSE-Locman.txt
+-rw-r--r-- 1 runneradmin 197121     5431 Oct 29 13:32 LICENSE-Wintun.txt
+-rw-r--r-- 1 runneradmin 197121    16725 Oct 29 13:32 LICENSE-Xray.txt
+drwxr-xr-x 1 runneradmin 197121        0 Oct 29 13:32 data
+-rwxr-xr-x 1 runneradmin 197121 21289472 Oct 23 11:43 flutter_windows.dll
+-rwxr-xr-x 1 runneradmin 197121   173056 Oct 29 13:32 locman.exe
+-rwxr-xr-x 1 runneradmin 197121   427552 Oct 29 13:32 wintun.dll
+-rwxr-xr-x 1 runneradmin 197121 34441728 Oct 29 13:32 xray.exe
