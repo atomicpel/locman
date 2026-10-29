@@ -20,6 +20,7 @@ class LocmanVpnService : VpnService() {
     companion object {
         const val ACTION_START = "app.locman.action.START"
         const val ACTION_STOP = "app.locman.action.STOP"
+        const val ACTION_SWITCH = "app.locman.action.SWITCH"
         private const val CHANNEL = "vpn"
         private const val NOTIFICATION_ID = 7
         private const val PROBE_URL_2 = "https://cp.cloudflare.com/generate_204"
@@ -64,6 +65,14 @@ class LocmanVpnService : VpnService() {
         if (intent?.action == ACTION_STOP) {
             worker.execute { stopVpn() }
             return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_SWITCH) {
+            // Кнопка «Переключить» в уведомлении: на другой живой узел, без открытия приложения.
+            if (VpnBus.state is VpnState.Connected) {
+                val gen = watchGen
+                watcher.execute { switchNext(gen) }
+            }
+            return START_STICKY
         }
         val spec = StartSpec.load(this)
         startForegroundCompat(notification(spec?.name ?: "Лоцман", "Поднимаю туннель"))
@@ -186,12 +195,28 @@ class LocmanVpnService : VpnService() {
         }, 20, 20, TimeUnit.SECONDS)
     }
 
+    @Volatile private var switching = false
+
+    private fun switchNext(gen: Int) {
+        if (switching) return
+        switching = true
+        try {
+            val spec = StartSpec.load(this) ?: return
+            if (!failover(gen, manual = true)) {
+                update(spec.name, "Другие узлы не ответили — ищу заново в приложении")
+                VpnBus.watch("switchEmpty", nodeId = spec.nodeId)
+            }
+        } finally {
+            switching = false
+        }
+    }
+
     /** Проверяем запасные параллельно, переключаемся на самый быстрый из ответивших. */
-    private fun failover(gen: Int): Boolean {
+    private fun failover(gen: Int, manual: Boolean = false): Boolean {
         val spec = StartSpec.load(this) ?: return false
         val candidates = spec.backups.filter { it.nodeId != spec.nodeId }.take(10)
         if (candidates.isEmpty()) return false
-        update(spec.name, "Узел не отвечает — проверяю запасные")
+        update(spec.name, if (manual) "Ищу другой узел…" else "Узел не отвечает — проверяю запасные")
         val pool = Executors.newFixedThreadPool(5)
         val results = try {
             candidates.map { b -> b to pool.submit<Long> { XrayEngine.measureDelay(b.test, spec.testUrl) } }
@@ -204,7 +229,7 @@ class LocmanVpnService : VpnService() {
         val rest = spec.backups.filter { it.nodeId != best.nodeId }
         val next = spec.copy(config = best.config, name = best.name, nodeId = best.nodeId, backups = rest)
         StartSpec.save(this, next)
-        VpnBus.watch("failover", name = best.name, nodeId = best.nodeId)
+        VpnBus.watch(if (manual) "switched" else "failover", name = best.name, nodeId = best.nodeId)
         worker.execute { connect(next) }
         return true
     }
@@ -305,6 +330,9 @@ class LocmanVpnService : VpnService() {
         val stop = PendingIntent.getService(
             this, 1, Intent(this, LocmanVpnService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE,
         )
+        val next = PendingIntent.getService(
+            this, 2, Intent(this, LocmanVpnService::class.java).setAction(ACTION_SWITCH), PendingIntent.FLAG_IMMUTABLE,
+        )
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_locman)
             .setContentTitle(title)
@@ -312,6 +340,7 @@ class LocmanVpnService : VpnService() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
+            .addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, "Переключить", next).build())
             .addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, "Отключить", stop).build())
             .build()
     }

@@ -423,7 +423,23 @@ class WinCore {
     });
   }
 
-  static Future<bool> _failover(int gen) async {
+  static bool _switching = false;
+
+  /// «Переключить узел» из меню у часов: на самый быстрый из запасных.
+  static Future<void> switchNext() async {
+    final sp = _spec;
+    if (sp == null || _switching) return;
+    _switching = true;
+    try {
+      if (!await _failover(_gen, manual: true)) {
+        _events.add(WatchEvent('switchEmpty', null, sp.nodeId));
+      }
+    } finally {
+      _switching = false;
+    }
+  }
+
+  static Future<bool> _failover(int gen, {bool manual = false}) async {
     final sp = _spec;
     if (sp == null) return false;
     final cands = sp.backups.where((b) => b['nodeId'] != sp.nodeId).take(10).toList();
@@ -442,7 +458,7 @@ class WinCore {
       nodeId: b['nodeId'],
       backups: sp.backups.where((x) => x['nodeId'] != b['nodeId']).toList(),
     );
-    _events.add(WatchEvent('failover', b['name'], b['nodeId']));
+    _events.add(WatchEvent(manual ? 'switched' : 'failover', b['name'], b['nodeId']));
     unawaited(_connect(next));
     return true;
   }

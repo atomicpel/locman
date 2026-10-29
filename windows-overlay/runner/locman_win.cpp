@@ -165,6 +165,9 @@ void TrayMenu() {
   AppendMenuW(menu, MF_STRING, 2,
               g_connected ? L"Отключить"            // Отключить
                           : L"Подключить");  // Подключить
+  if (g_connected) {
+    AppendMenuW(menu, MF_STRING, 4, L"\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u0443\u0437\u0435\u043b");  // Переключить узел
+  }
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(menu, MF_STRING, 3, L"Выход");  // Выход
   POINT pt{};
@@ -180,6 +183,9 @@ void TrayMenu() {
       break;
     case 2:
       Invoke("tray", {{flutter::EncodableValue("action"), flutter::EncodableValue("toggle")}});
+      break;
+    case 4:
+      Invoke("tray", {{flutter::EncodableValue("action"), flutter::EncodableValue("switch")}});
       break;
     case 3:
       ShowMain();

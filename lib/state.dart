@@ -1892,7 +1892,7 @@ class AppState extends ChangeNotifier {
     return nodeById(activeId ?? lastNodeId)?.place.code;
   }
 
-  Future<void> connect({bool ignorePin = false, String? nodeId, bool force = false}) async {
+  Future<void> connect({bool ignorePin = false, String? nodeId, bool force = false, String? avoid}) async {
     // Уже подключены к этому узлу — ядро не перезапускаем.
     if (!force && nodeId != null && nodeId == activeId && phase == Phase.on) {
       flash('Уже подключены к этому узлу');
@@ -1942,7 +1942,7 @@ class AppState extends ChangeNotifier {
     final kind = _kindForMode();
     failedKinds.clear();
 
-    final tried = <String>{};
+    final tried = <String>{if (avoid != null) avoid};
     var started = false;
     ProxyNode? chosen;
     var userPick = false;
@@ -2293,6 +2293,8 @@ class AppState extends ChangeNotifier {
       switch (e.action) {
         case 'toggle':
           togglePower();
+        case 'switch':
+          if (phase == Phase.on) unawaited(WinCore.switchNext());
         case 'exit':
           unawaited(quitApp());
         default:
@@ -2427,6 +2429,14 @@ class AppState extends ChangeNotifier {
           if (n != null) _record(n.id, -1, real: true);
           unawaited(connect(ignorePin: true));
         }
+      case 'switched':
+        // Пользователь сам нажал «Переключить» — старый узел не штрафуем.
+        log('Переключились на ${e.name ?? 'другой узел'} по кнопке');
+        flash('Переключились на ${e.name ?? 'другой узел'}');
+        stopHunt();
+      case 'switchEmpty':
+        log('Запасные не ответили — ищем другой узел заново');
+        if (phase == Phase.on) unawaited(connect(ignorePin: true, avoid: e.nodeId ?? activeId));
       case 'alive':
         break;
     }
