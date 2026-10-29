@@ -1,0 +1,42 @@
+
+::group::✅ Passing tests
+✅ /home/runner/work/locman/locman/test/core_test.dart: stableId — это FNV-1a 64
+✅ /home/runner/work/locman/locman/test/core_test.dart: VLESS Reality + XHTTP
+✅ /home/runner/work/locman/locman/test/core_test.dart: одинаковый сервер с другим именем — тот же id
+✅ /home/runner/work/locman/locman/test/core_test.dart: IPv6
+✅ /home/runner/work/locman/locman/test/core_test.dart: VMess в base64
+✅ /home/runner/work/locman/locman/test/core_test.dart: Shadowsocks SIP002
+✅ /home/runner/work/locman/locman/test/core_test.dart: мусор не разбирается
+✅ /home/runner/work/locman/locman/test/core_test.dart: подписка в base64 с метаданными и заглушкой
+✅ /home/runner/work/locman/locman/test/core_test.dart: неизвестные схемы считаются
+✅ /home/runner/work/locman/locman/test/core_test.dart: небезопасные узлы
+✅ /home/runner/work/locman/locman/test/core_test.dart: Hysteria2: порты и конфиг
+✅ /home/runner/work/locman/locman/test/core_test.dart: конфиг Xray: защищённые входы, DNS, прямые сервисы
+✅ /home/runner/work/locman/locman/test/core_test.dart: конфиг для проверки без входов и маршрутов
+✅ /home/runner/work/locman/locman/test/core_test.dart: allowInsecure не попадает в Xray, отпечаток по умолчанию chrome
+✅ /home/runner/work/locman/locman/test/core_test.dart: JSON-подписка Xray
+✅ /home/runner/work/locman/locman/test/core_test.dart: каталог читается и режимы сходятся
+✅ /home/runner/work/locman/locman/test/core_test.dart: страна по флагу и названию
+✅ /home/runner/work/locman/locman/test/core_test.dart: фрагментация: отдельный выход и dialerProxy, не для Hysteria2
+✅ /home/runner/work/locman/locman/test/core_test.dart: TUN в Xray и счётчики трафика
+✅ /home/runner/work/locman/locman/test/core_test.dart: найденный IP сохраняет домен в SNI и Host
+✅ /home/runner/work/locman/locman/test/core_test.dart: узлы с локальными адресами отбрасываются
+✅ /home/runner/work/locman/locman/test/core_test.dart: плюсы в имени — это пробелы
+✅ /home/runner/work/locman/locman/test/core_test.dart: много ссылок разом: подписки по отдельности, ключи вместе
+✅ /home/runner/work/locman/locman/test/core_test.dart: профиль узла: отпечаток, mux и DNS
+✅ /home/runner/work/locman/locman/test/core_test.dart: профиль сохраняется и читается
+✅ /home/runner/work/locman/locman/test/core_test.dart: ссылка импорта: только http(s) и ключи, одной строкой
+✅ /home/runner/work/locman/locman/test/core_test.dart: устойчивая сортировка
+✅ /home/runner/work/locman/locman/test/core_test.dart: DNS-запрос в формате wire и разбор ответа
+✅ /home/runner/work/locman/locman/test/core_test.dart: поделиться: ссылка locman://import?data= туда и обратно
+✅ /home/runner/work/locman/locman/test/core_test.dart: набор подписок узнаётся, даже если ссылку порезали переносами или потеряли начало
+✅ /home/runner/work/locman/locman/test/core_test.dart: QR-код совпадает с эталоном (python-qrcode)
+✅ /home/runner/work/locman/locman/test/core_test.dart: маршруты TUN: весь IPv4, кроме локальных сетей
+✅ /home/runner/work/locman/locman/test/core_test.dart: Windows: конфиг TUN и системного прокси
+✅ /home/runner/work/locman/locman/test/core_test.dart: SNI и подсеть узла — для бережной проверки
+✅ /home/runner/work/locman/locman/test/core_test.dart: Объединение соединений: только где помогает и возможно
+✅ /home/runner/work/locman/locman/test/core_test.dart: Проверка данными сохраняется в здоровье узла
+✅ /home/runner/work/locman/locman/test/look_test.dart: облики рисуются
+::endgroup::
+
+🎉 37 tests passed.
