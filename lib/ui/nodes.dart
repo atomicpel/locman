@@ -26,8 +26,14 @@ class _NodesScreenState extends State<NodesScreen> {
   int _byLatency(AppState s, ProxyNode a, ProxyNode b) {
     final la = s.latencyOf(a.id);
     final lb = s.latencyOf(b.id);
-    int rank(int l) => l > 0 ? 0 : (l == 0 ? 1 : 2);
-    final r = rank(la).compareTo(rank(lb));
+    // Через которые идут данные — первыми, отдыхающие — после отвечающих.
+    int rank(ProxyNode n, int l) {
+      if (s.isResting(n.id)) return 3;
+      if (s.isProven(n.id) && l >= 0) return 0;
+      return l > 0 ? 1 : (l == 0 ? 2 : 4);
+    }
+
+    final r = rank(a, la).compareTo(rank(b, lb));
     if (r != 0) return r;
     return la.compareTo(lb);
   }
@@ -89,13 +95,19 @@ class _NodesScreenState extends State<NodesScreen> {
             ],
             if (onlyAlive && s.hasFreshChecks) ...[
               const SizedBox(height: 8),
-              Text('Только узлы, ответившие за последние 20 минут.', style: p.text(13, color: p.muted)),
+              Text('Только узлы, ответившие за последние 20 минут. Галочка — через узел реально шли данные.',
+                  style: p.text(13, color: p.muted)),
             ],
             if (s.checkingAll > 0) ...[
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: Text('Проверяем: ${s.checkingDone} из ${s.checkingAll}', style: p.text(13, color: p.muted))),
+                  Expanded(
+                      child: Text(
+                          s.checkingDeep
+                              ? 'Проверяем данными лучшие: ${s.checkingDone} из ${s.checkingAll}'
+                              : 'Проверяем: ${s.checkingDone} из ${s.checkingAll}',
+                          style: p.text(13, color: p.muted))),
                   TextButton(
                     onPressed: s.stopCheck,
                     child: Text('Остановить', style: p.text(13, weight: FontWeight.w600, color: p.accent)),
@@ -268,6 +280,9 @@ class NodeRow extends StatelessWidget {
     final p = PaletteScope.of(context);
     final latency = s.latencyOf(node.id);
     final checking = s.checkingId == node.id;
+    final resting = s.isResting(node.id);
+    final proven = !resting && s.isProven(node.id);
+    final restMin = resting ? ((s.restUntil(node.id) - DateTime.now().millisecondsSinceEpoch) / 60000).ceil() : 0;
     return InkWell(
       onTap: () => showNodeSheet(context, s, node),
       child: ConstrainedBox(
@@ -313,9 +328,20 @@ class NodeRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              if (proven && !checking) ...[
+                Tooltip(
+                  message: 'Через узел недавно реально шли данные',
+                  child: Icon(Icons.verified_rounded, size: 16, color: p.accent),
+                ),
+                const SizedBox(width: 6),
+              ],
               Text(
-                checking ? '…' : (latency > 0 ? '$latency мс' : (latency < 0 ? 'нет ответа' : '—')),
-                style: p.text(14, color: latency < 0 ? p.danger : p.fg),
+                checking
+                    ? '…'
+                    : resting
+                        ? 'пауза $restMin мин'
+                        : (latency > 0 ? '$latency мс' : (latency < 0 ? 'нет ответа' : '—')),
+                style: p.text(14, color: latency < 0 || resting ? p.danger : p.fg),
               ),
             ],
           ),

@@ -262,6 +262,21 @@ class Net {
     }
   }
 
+  /// Через туннель идут настоящие данные: скачиваем 64 КБ. Короткий generate_204 проходит
+  /// и тогда, когда ТСПУ «замораживает» соединение после первых ~16 КБ.
+  static Future<bool> tunnelData() async {
+    final t = tunnel;
+    if (t == null) return false;
+    const urls = [
+      'https://speed.cloudflare.com/__down?bytes=65536',
+      'https://proof.ovh.net/files/1Mb.dat',
+    ];
+    for (final url in urls) {
+      if (await _fetchBytes(t, url, 64 * 1024) >= 48 * 1024) return true;
+    }
+    return false;
+  }
+
   /// Что за сеть сейчас: открывается зарубежное — обычные блокировки (ЧС),
   /// открываются только российские сайты — белые списки (БС), ничего — null.
   static Future<NetKind?> detectKind() async {

@@ -165,6 +165,9 @@ class LocmanVpnService : VpnService() {
     private fun startWatchdog(nodeId: String, testUrl: String) {
         watchdog?.cancel(false)
         val gen = ++watchGen
+        flowUp.fill(0)
+        flowDown.fill(0)
+        flowSince = System.currentTimeMillis()
         var fails = 0
         var tick = 0
         var stalledSince = 0L
@@ -197,6 +200,44 @@ class LocmanVpnService : VpnService() {
 
     @Volatile private var switching = false
 
+    // ---- Заморозка: запросы уходят, а в ответ ничего ----
+    private val flowUp = LongArray(12)
+    private val flowDown = LongArray(12)
+    private var flowAt = 0
+    @Volatile private var flowSince = 0L
+    @Volatile private var lastFreezeCheck = 0L
+
+    /** Каждую секунду из монитора трафика (поток worker). */
+    private fun watchFlow(up: Long, down: Long) {
+        flowUp[flowAt] = up
+        flowDown[flowAt] = down
+        flowAt = (flowAt + 1) % flowUp.size
+        val now = System.currentTimeMillis()
+        if (flowSince == 0L || now - flowSince < 20_000 || now - lastFreezeCheck < 60_000) return
+        if (flowUp.sum() < 1500 || flowDown.sum() > 1024) return
+        lastFreezeCheck = now
+        val gen = watchGen
+        watcher.execute { freezeCheck(gen) }
+    }
+
+    /** Похоже на заморозку — проверяем настоящей загрузкой и, если данных нет, уходим на запасной. */
+    private fun freezeCheck(gen: Int) {
+        if (gen != watchGen || switching) return
+        val spec = StartSpec.load(this) ?: return
+        if (DataProbe.passes(spec) || gen != watchGen) return
+        if (DataProbe.passes(spec) || gen != watchGen) return
+        switching = true
+        try {
+            update(spec.name, "Данные не идут — переключаю узел")
+            if (!failover(gen, frozen = true)) {
+                update(spec.name, "Данные не идут — ищу рабочий узел")
+                VpnBus.watch("stalled", nodeId = spec.nodeId)
+            }
+        } finally {
+            switching = false
+        }
+    }
+
     private fun switchNext(gen: Int) {
         if (switching) return
         switching = true
@@ -212,7 +253,7 @@ class LocmanVpnService : VpnService() {
     }
 
     /** Проверяем запасные параллельно, переключаемся на самый быстрый из ответивших. */
-    private fun failover(gen: Int, manual: Boolean = false): Boolean {
+    private fun failover(gen: Int, manual: Boolean = false, frozen: Boolean = false): Boolean {
         val spec = StartSpec.load(this) ?: return false
         val candidates = spec.backups.filter { it.nodeId != spec.nodeId }.take(10)
         if (candidates.isEmpty()) return false
@@ -229,7 +270,15 @@ class LocmanVpnService : VpnService() {
         val rest = spec.backups.filter { it.nodeId != best.nodeId }
         val next = spec.copy(config = best.config, name = best.name, nodeId = best.nodeId, backups = rest)
         StartSpec.save(this, next)
-        VpnBus.watch(if (manual) "switched" else "failover", name = best.name, nodeId = best.nodeId)
+        VpnBus.watch(
+            when {
+                manual -> "switched"
+                frozen -> "frozen"
+                else -> "failover"
+            },
+            name = best.name,
+            nodeId = best.nodeId,
+        )
         worker.execute { connect(next) }
         return true
     }
@@ -262,6 +311,7 @@ class LocmanVpnService : VpnService() {
                     down = 0L
                 }
                 VpnBus.traffic(up, down, sumUp, sumDown)
+                watchFlow(up, down)
                 if (tick++ % 5 == 0) update(name, "↓ ${rate(down)}   ↑ ${rate(up)}   за сеанс ${bytes(sumUp + sumDown)}")
                 return@scheduleWithFixedDelay
             }
@@ -274,12 +324,14 @@ class LocmanVpnService : VpnService() {
             lastUp = s[1]
             lastDown = s[3]
             VpnBus.traffic(up, down, upTotal, downTotal)
+            watchFlow(up, down)
             if (tick++ % 5 == 0) update(name, "↓ ${rate(down)}   ↑ ${rate(up)}   за сеанс ${bytes(upTotal + downTotal)}")
         }, 1, 1, TimeUnit.SECONDS)
     }
 
     private fun teardown(closeTun: Boolean = true) {
         watchGen++
+        flowSince = 0L
         watchdog?.cancel(false)
         watchdog = null
         monitor?.cancel(false)

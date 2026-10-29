@@ -568,6 +568,13 @@ class _SafePage extends StatelessWidget {
               'Если узлу это мешает, «Лоцман» сам отключит её для него.',
           control: PillSwitch(on: s.fragment, onChanged: s.setFragment),
         ),
+        SettingRow(
+          title: 'Объединять соединения',
+          line: 'Вместо десятков одновременных подключений к серверу — одно (mux). Фильтр оператора '
+              'замораживает узел, к которому разом открывается много соединений. Работает для узлов без Vision; '
+              'XHTTP и gRPC объединяют сами. Если серверу это мешает, «Лоцман» отключит для него сам.',
+          control: PillSwitch(on: s.joinConns, onChanged: s.setJoinConns),
+        ),
         const SizedBox(height: 16),
         const SectionTitle('DNS по HTTPS', line: 'Запросы имён идут зашифрованными через узел — провайдер их не видит.'),
         const SizedBox(height: 8),

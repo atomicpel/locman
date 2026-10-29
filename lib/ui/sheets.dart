@@ -87,6 +87,11 @@ Future<void> showNodeSheet(BuildContext context, AppState s, ProxyNode node) => 
             style: p.text(14, color: p.muted),
           ),
           if (source != null) Text('Источник: ${source.title}', style: p.text(13, color: p.muted)),
+          if (s.isResting(node.id))
+            Text('Данные через узел не пошли — отдыхает до ${_hm(s.restUntil(node.id))}, потом попробуем другой профиль',
+                style: p.text(13, color: p.danger))
+          else if (s.isProven(node.id))
+            Text('Через узел недавно реально шли данные', style: p.text(13, color: p.accent)),
           if (node.securityIssue != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -331,4 +336,10 @@ Future<void> showShareSheet(BuildContext context, AppState s) {
       ],
     );
   });
+}
+
+String _hm(int ms) {
+  final t = DateTime.fromMillisecondsSinceEpoch(ms);
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${two(t.hour)}:${two(t.minute)}';
 }

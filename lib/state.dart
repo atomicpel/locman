@@ -84,17 +84,25 @@ class Offer {
 }
 
 class NodeCheck {
-  NodeCheck(this.delay, this.at, this.fails, this.real);
+  NodeCheck(this.delay, this.at, this.fails, this.real, {this.data = 0, this.dataAt = 0, this.dataFails = 0});
   final int delay;
   final int at;
   final int fails;
   final bool real;
 
+  /// Проверка данными (загрузка больше 16 КБ через узел): 1 — идут, -1 — нет, 0 — не проверяли.
+  final int data;
+  final int dataAt;
+
+  /// Сколько раз подряд данные не пошли — от этого зависит, сколько узел отдыхает.
+  final int dataFails;
+
   bool get alive => delay > 0;
-  List<Object> toJson() => [delay, at, fails, real ? 1 : 0];
+  List<Object> toJson() => [delay, at, fails, real ? 1 : 0, data, dataAt, dataFails];
   static NodeCheck? fromJson(Object? j) {
     if (j is! List || j.length < 4) return null;
-    return NodeCheck((j[0] as num).toInt(), (j[1] as num).toInt(), (j[2] as num).toInt(), j[3] == 1);
+    int at(int i) => j.length > i ? (j[i] as num).toInt() : 0;
+    return NodeCheck(at(0), at(1), at(2), j[3] == 1, data: at(4), dataAt: at(5), dataFails: at(6));
   }
 }
 
@@ -224,6 +232,13 @@ class AppState extends ChangeNotifier {
   /// Спросить про перезапуск от имени администратора (для TUN).
   bool adminAsk = false;
   Set<String> noFrag = {};
+
+  /// Объединять соединения (mux) там, где протокол позволяет: ТСПУ видит одно
+  /// соединение к серверу вместо десятков одновременных.
+  bool joinConns = true;
+
+  /// Узлы, которые с объединением соединений не работают (сервер его не понимает).
+  Set<String> noMux = {};
   String? pinnedId;
   String? lastNodeId;
   Set<String> excludes = {};
@@ -269,6 +284,9 @@ class AppState extends ChangeNotifier {
   String? checkingId;
   int checkingAll = 0;
   int checkingDone = 0;
+
+  /// Идёт второй шаг проверки — загрузкой через узел.
+  bool checkingDeep = false;
   String? toast;
   Phase phase = Phase.off;
   int seekStep = 0;
@@ -522,6 +540,8 @@ class AppState extends ChangeNotifier {
     winLeakBlock = j['winLeakBlock'] == true;
     banned = ((j['banned'] as List?) ?? const []).map((e) => e.toString()).toSet();
     noFrag = ((j['noFrag'] as List?) ?? const []).map((e) => e.toString()).toSet();
+    joinConns = j['joinConns'] != false;
+    noMux = ((j['noMux'] as List?) ?? const []).map((e) => e.toString()).toSet();
     pinnedId = j['pinnedId'] as String?;
     lastNodeId = j['lastNodeId'] as String?;
     excludes = ((j['excludes'] as List?) ?? const []).map((e) => e.toString()).toSet();
@@ -583,6 +603,8 @@ class AppState extends ChangeNotifier {
         'winLeakBlock': winLeakBlock,
         'banned': banned.toList(),
         'noFrag': noFrag.take(800).toList(),
+        'joinConns': joinConns,
+        'noMux': noMux.take(800).toList(),
         'pinnedId': pinnedId,
         'lastNodeId': lastNodeId,
         'excludes': excludes.toList(),
@@ -788,6 +810,11 @@ class AppState extends ChangeNotifier {
   void setHideDupes(bool v) => _set(() => hideDupes = v);
   void setFragment(bool v) {
     _set(() => fragment = v);
+    _reapply();
+  }
+
+  void setJoinConns(bool v) {
+    _set(() => joinConns = v);
     _reapply();
   }
   void setTunEngine(String v) => _set(() => tunEngine = v);
@@ -1360,6 +1387,7 @@ class AppState extends ChangeNotifier {
     _set(() {
       profiles.clear();
       noFrag.clear();
+      noMux.clear();
     });
     log('Профили узлов забыты');
     flash('Профили узлов забыты');
@@ -1405,7 +1433,52 @@ class AppState extends ChangeNotifier {
   void _record(String nodeId, int delay, {required bool real}) {
     final key = '$_healthKind/$nodeId';
     final prev = health[key];
-    health[key] = NodeCheck(delay, DateTime.now().millisecondsSinceEpoch, delay > 0 ? 0 : (prev?.fails ?? 0) + 1, real);
+    health[key] = NodeCheck(delay, DateTime.now().millisecondsSinceEpoch, delay > 0 ? 0 : (prev?.fails ?? 0) + 1, real,
+        data: prev?.data ?? 0, dataAt: prev?.dataAt ?? 0, dataFails: prev?.dataFails ?? 0);
+  }
+
+  /// Итог проверки данными. Не пошли — узел «отдыхает»: если ТСПУ его заморозил,
+  /// новые попытки (тем более с другим отпечатком) только продлевают заморозку.
+  void _recordData(String nodeId, bool ok) {
+    final key = '$_healthKind/$nodeId';
+    final prev = health[key];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    health[key] = NodeCheck(prev?.delay ?? 0, prev?.at ?? 0, prev?.fails ?? 0, prev?.real ?? false,
+        data: ok ? 1 : -1, dataAt: now, dataFails: ok ? 0 : (prev?.dataFails ?? 0) + 1);
+    if (!ok) {
+      final n = nodeById(nodeId);
+      if (n != null) (_kindNoData[n.kind] ??= []).add(now);
+    }
+  }
+
+  /// Через узел недавно (3 часа) реально шли данные.
+  static const provenMs = 3 * 3600 * 1000;
+
+  bool isProven(String nodeId) {
+    final c = checkOf(nodeId);
+    return c != null && c.data == 1 && DateTime.now().millisecondsSinceEpoch - c.dataAt < provenMs;
+  }
+
+  /// До какого момента узел отдыхает: 3, 6, потом 10 минут после «данные не пошли».
+  int restUntil(String nodeId) {
+    final c = checkOf(nodeId);
+    if (c == null || c.data != -1) return 0;
+    const steps = [3, 6, 10];
+    return c.dataAt + steps[(min(c.dataFails, 3) - 1).clamp(0, 2)] * 60 * 1000;
+  }
+
+  bool isResting(String nodeId) => restUntil(nodeId) > DateTime.now().millisecondsSinceEpoch;
+
+  /// Когда в этой сети не шли данные по видам соединения (протокол/защита/транспорт).
+  final Map<String, List<int>> _kindNoData = {};
+
+  /// Вид соединения, который сейчас «замерзает»: хотя бы два узла этого вида за 15 минут.
+  bool _kindFreezing(String kind) {
+    final list = _kindNoData[kind];
+    if (list == null) return false;
+    final cutoff = DateTime.now().millisecondsSinceEpoch - 15 * 60 * 1000;
+    list.removeWhere((t) => t < cutoff);
+    return list.length >= 2;
   }
 
   Future<void> _loadHealth() async {
@@ -1430,31 +1503,55 @@ class AppState extends ChangeNotifier {
 
   bool _fragFor(ProxyNode n) => fragment && n.canFragment && !noFrag.contains(n.id);
 
+  bool _muxFor(ProxyNode n) => joinConns && n.muxHelps && !noMux.contains(n.id);
+
   NodeProfile? profileOf(ProxyNode n) => profiles[n.id];
 
-  String _testConfig(ProxyNode n, {required bool frag, NodeProfile? profile}) =>
-      XrayConfig.build(n, forTest: true, dns: dns, fragment: frag, profile: profile ?? profiles[n.id]);
+  String _testConfig(ProxyNode n, {required bool frag, NodeProfile? profile, bool? mux}) =>
+      XrayConfig.build(n,
+          forTest: true, dns: dns, fragment: frag, profile: profile ?? profiles[n.id], joinConns: mux ?? _muxFor(n));
 
-  /// Не больше 3 одновременных проверок к одному серверу: провайдер реже замечает проверку,
-  /// а рабочие узлы реже получают ложное «нет ответа».
-  final Map<String, _Gate> _hostGates = {};
+  /// Бережная проверка. ТСПУ замораживает узел, если к одному SNI почти одновременно
+  /// открывается больше ~3 TLS-соединений, — поэтому к одной паре «SNI + подсеть»
+  /// одновременно идёт одна проверка с паузой после неё, к одной подсети — не больше двух.
+  /// Разные серверы по-прежнему проверяются параллельно.
+  final Map<String, _Gate> _flowGates = {};
+  final Map<String, _Gate> _netGates = {};
+
+  Future<T> _gentle<T>(ProxyNode n, Future<T> Function() task) {
+    final net = n.subnet;
+    return (_flowGates['${n.sniKey}@$net'] ??= _Gate(1, spacing: const Duration(milliseconds: 500)))
+        .run(() => (_netGates[net] ??= _Gate(2)).run(task));
+  }
 
   /// [gate] — общий ограничитель проверок; берётся уже внутри очереди к серверу,
   /// чтобы ожидание одного сервера не занимало места других.
-  Future<int> _measure(ProxyNode n, String config, {_Gate? gate}) =>
-      (_hostGates[n.address.toLowerCase()] ??= _Gate(3)).run(() {
+  Future<int> _measure(ProxyNode n, String config, {_Gate? gate}) => _gentle(n, () {
         final url = testUrl;
         return gate == null ? Native.measure(config, url) : gate.run(() => Native.measure(config, url));
       });
 
   /// Настоящая проверка: запрос через узел силами Xray; для Hysteria2 и JSON — только так.
-  /// С фрагментацией не прошёл — пробуем без неё и запоминаем, что этому узлу она мешает.
+  /// Не прошёл с объединением соединений или фрагментацией — пробуем без них
+  /// и запоминаем, что этому узлу они мешают.
   Future<int> _realTest(ProxyNode n, {_Gate? gate}) async {
     final frag = _fragFor(n);
+    final mux = _muxFor(n);
     final d = await _measure(n, _testConfig(n, frag: frag), gate: gate);
-    if (d > 0 || !frag || profiles[n.id]?.frag != null) return d;
-    final plain = await _measure(n, _testConfig(n, frag: false), gate: gate);
-    if (plain > 0) noFrag.add(n.id);
+    if (d > 0) return d;
+    if (mux && profiles[n.id]?.mux != true) {
+      final single = await _measure(n, _testConfig(n, frag: frag, mux: false), gate: gate);
+      if (single > 0) {
+        noMux.add(n.id);
+        return single;
+      }
+    }
+    if (!frag || profiles[n.id]?.frag != null) return d;
+    final plain = await _measure(n, _testConfig(n, frag: false, mux: false), gate: gate);
+    if (plain > 0) {
+      noFrag.add(n.id);
+      if (mux) noMux.add(n.id);
+    }
     return plain;
   }
 
@@ -1486,30 +1583,45 @@ class AppState extends ChangeNotifier {
     return out;
   }
 
+  /// Какой по счёту вариант подключения пробовать у узла в следующий раз.
+  final Map<String, int> _variantAt = {};
+
   /// Проверка пути через узел отдельным экземпляром ядра: данные больше 16 КБ, Telegram, DNS.
-  /// Пробует до [limit] вариантов подключения; рабочий запоминается для узла.
-  Future<_PathResult> _path(ProxyNode n, {int limit = 2, bool Function()? cancelled}) async {
+  /// За раз — один вариант подключения. Данные не пошли — узел отдыхает, а следующий
+  /// вариант (другой отпечаток, дробление) пробуем только после отдыха: смена отпечатка
+  /// во время заморозки её только продлевает.
+  Future<_PathResult> _path(ProxyNode n, {bool Function()? cancelled}) async {
+    if (cancelled?.call() == true) return const _PathResult(_Verdict.skipped);
     final saved = profiles[n.id];
-    for (final variant in _variants(n).take(limit)) {
-      if (cancelled?.call() == true) return const _PathResult(_Verdict.noData);
-      final check = await _probePath(n, variant, dnsOrder(saved?.dns ?? dns));
-      if (check == null) continue;
-      if (check.data && check.telegram && check.dns != null) {
-        final found = variant.withDns(check.dns);
-        if (profiles[n.id] != found) {
-          profiles[n.id] = found;
-          if (!found.isPlain) log('${n.title}: рабочий профиль — ${found.label}');
-          _save();
-        }
-        return _PathResult(_Verdict.ok, speed: check.speed);
-      }
-      if (check.data && !check.telegram) return _PathResult(_Verdict.noTelegram, speed: check.speed);
-      if (check.data) return _PathResult(_Verdict.noDns, speed: check.speed);
+    final variants = _variants(n);
+    final idx = (_variantAt[n.id] ?? 0) % variants.length;
+    final variant = variants[idx];
+    final check = await _probePath(n, variant, dnsOrder(saved?.dns ?? dns));
+    if (check == null) return const _PathResult(_Verdict.skipped);
+    if (!check.data) {
+      _recordData(n.id, false);
+      _variantAt[n.id] = idx + 1;
+      return const _PathResult(_Verdict.noData);
     }
-    return const _PathResult(_Verdict.noData);
+    _recordData(n.id, true);
+    _variantAt.remove(n.id);
+    if (check.telegram && check.dns != null) {
+      final found = variant.withDns(check.dns);
+      if (profiles[n.id] != found) {
+        profiles[n.id] = found;
+        if (!found.isPlain) log('${n.title}: рабочий профиль — ${found.label}');
+        _save();
+      }
+      return _PathResult(_Verdict.ok, speed: check.speed);
+    }
+    if (!check.telegram) return _PathResult(_Verdict.noTelegram, speed: check.speed);
+    return _PathResult(_Verdict.noDns, speed: check.speed);
   }
 
-  Future<PathCheck?> _probePath(ProxyNode n, NodeProfile variant, List<String> dnsList) async {
+  Future<PathCheck?> _probePath(ProxyNode n, NodeProfile variant, List<String> dnsList) =>
+      _gentle(n, () => _probePathNow(n, variant, dnsList));
+
+  Future<PathCheck?> _probePathNow(ProxyNode n, NodeProfile variant, List<String> dnsList) async {
     final local = LocalProxy(
       socksPort: await Net.freePort(),
       httpPort: await Net.freePort(),
@@ -1517,7 +1629,14 @@ class AppState extends ChangeNotifier {
       pass: Net.token(24),
     );
     final config = XrayConfig.build(n,
-        local: local, directRu: false, dns: dns, fragment: _fragFor(n), profile: variant, encryptedDns: false, udp: false);
+        local: local,
+        directRu: false,
+        dns: dns,
+        fragment: _fragFor(n),
+        profile: variant,
+        encryptedDns: false,
+        udp: false,
+        joinConns: _muxFor(n));
     int? id;
     try {
       id = await Native.probeStart(config);
@@ -1536,9 +1655,22 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     final delay = await _testOne(n);
     _record(n.id, delay, real: true);
+    notifyListeners();
+    // Ответил — проверяем и данными (кроме узла, через который сейчас подключены:
+    // его проверяет сам трафик).
+    var verdict = '';
+    if (delay > 0 && !(phase == Phase.on && n.id == activeId) && !_sameSubAsActive(n)) {
+      final r = await _path(n);
+      verdict = switch (r.verdict) {
+        _Verdict.ok => ' · данные идут',
+        _Verdict.noTelegram || _Verdict.noDns => ' · данные идут, Telegram или DNS — нет',
+        _Verdict.noData => ' · данные не идут, узел отдохнёт',
+        _Verdict.skipped => '',
+      };
+    }
     checkingId = null;
     unawaited(_saveHealth());
-    flash(delay > 0 ? '${n.title} · $delay мс' : 'Нет ответа');
+    flash(delay > 0 ? '${n.title} · $delay мс$verdict' : 'Нет ответа');
   }
 
   int _checkGen = 0;
@@ -1549,6 +1681,7 @@ class AppState extends ChangeNotifier {
     _checkGen++;
     checkingAll = 0;
     checkingDone = 0;
+    checkingDeep = false;
     log('Проверка остановлена');
     notifyListeners();
   }
@@ -1623,11 +1756,44 @@ class AppState extends ChangeNotifier {
       unawaited(_saveHealth());
       return;
     }
+    // Второй шаг: 20 самых быстрых из ответивших проверяем по-настоящему — загрузкой
+    // больше 16 КБ. Бережно: по три узла, к одному SNI и подсети — по одному.
+    int byDelay(ProxyNode a, ProxyNode b) => latencyOf(a.id).compareTo(latencyOf(b.id));
+    final deep = (list
+            .where((n) =>
+                latencyOf(n.id) > 0 &&
+                !isResting(n.id) &&
+                !(phase == Phase.on && n.id == activeId) &&
+                !_sameSubAsActive(n))
+            .toList()
+          ..sort(byDelay))
+        .take(20)
+        .toList();
+    if (deep.isNotEmpty) {
+      checkingDeep = true;
+      checkingAll = deep.length;
+      checkingDone = 0;
+      notifyListeners();
+      await _pool(deep, 3, (n) async {
+        if (stopped()) return;
+        await _path(n, cancelled: stopped);
+        if (stopped()) return;
+        checkingDone++;
+        _throttledNotify();
+      });
+      if (stopped()) {
+        unawaited(_saveHealth());
+        return;
+      }
+      checkingDeep = false;
+    }
     checkingAll = 0;
     unawaited(_saveHealth());
+    _pushBackups();
     final alive = list.where((n) => latencyOf(n.id) > 0).length;
-    log('Проверены узлы: живых $alive из ${list.length}');
-    flash('Живых узлов: $alive из ${list.length}');
+    final proven = list.where((n) => isProven(n.id)).length;
+    log('Проверены узлы: отвечают $alive из ${list.length}, данные идут через $proven');
+    flash('Отвечают $alive из ${list.length} · данные идут через $proven');
   }
 
   int _lastNotify = 0;
@@ -1758,7 +1924,9 @@ class AppState extends ChangeNotifier {
   }
 
   /// Скорость скачивания через узел, байт/с; 0 — не смогли.
-  Future<int> _speedOf(ProxyNode n) async {
+  Future<int> _speedOf(ProxyNode n) => _gentle(n, () => _speedOfNow(n));
+
+  Future<int> _speedOfNow(ProxyNode n) async {
     final local = LocalProxy(
       socksPort: await Net.freePort(),
       httpPort: await Net.freePort(),
@@ -1766,7 +1934,13 @@ class AppState extends ChangeNotifier {
       pass: Net.token(24),
     );
     final config = XrayConfig.build(n,
-        local: local, directRu: false, dns: dns, fragment: _fragFor(n), profile: profiles[n.id], udp: false);
+        local: local,
+        directRu: false,
+        dns: dns,
+        fragment: _fragFor(n),
+        profile: profiles[n.id],
+        udp: false,
+        joinConns: _muxFor(n));
     int? id;
     try {
       id = await Native.probeStart(config);
@@ -1774,6 +1948,7 @@ class AppState extends ChangeNotifier {
       await Future.delayed(const Duration(milliseconds: 400));
       // Предлагаем только узел, через который идут данные, открывается Telegram и работает DNS.
       final path = await Net.checkPath(local, dns: dnsOrder(profiles[n.id]?.dns ?? dns));
+      if (path.data || !_sameSubAsActive(n)) _recordData(n.id, path.data);
       if (!path.data || !path.telegram || path.dns == null) return 0;
       final saved = profiles[n.id] ?? const NodeProfile();
       if (saved.dns != path.dns) profiles[n.id] = saved.withDns(path.dns);
@@ -1867,20 +2042,45 @@ class AppState extends ChangeNotifier {
         if (banned.isNotEmpty && isBanned(n)) continue;
         if (countries == 'noRu' && n.place.code == 'RU') continue;
         if (isDead(n.id)) continue;
+        if (isResting(n.id)) continue;
         if (!seen.add(n.endpointKey)) continue;
         fits.add(n);
       }
     }
-    // Сначала недавно живые (по задержке), потом остальные вперемешку.
-    final known = fits.where((n) => latencyOf(n.id) > 0).toList()
-      ..sort((a, b) => latencyOf(a.id).compareTo(latencyOf(b.id)));
-    final rest = fits.where((n) => latencyOf(n.id) <= 0).toList()..shuffle(_random);
-    final all = [...known, ...rest];
-    // Вид соединения, который провайдер сейчас режет, — в конец: обычно режут вид целиком.
-    // С «той же страной» узлы этой страны — вперёд.
+    // Сначала узлы, через которые недавно реально шли данные, потом недавно живые
+    // (по задержке), потом остальные вперемешку.
+    int byDelay(ProxyNode a, ProxyNode b) => latencyOf(a.id).compareTo(latencyOf(b.id));
+    final proven = fits.where((n) => isProven(n.id)).toList()..sort(byDelay);
+    final known = fits.where((n) => !isProven(n.id) && latencyOf(n.id) > 0).toList()..sort(byDelay);
+    final rest = fits.where((n) => !isProven(n.id) && latencyOf(n.id) <= 0).toList()..shuffle(_random);
+    final all = [...proven, ...known, ...rest];
+    // Вид соединения, который провайдер сейчас режет (в этом поиске или замерзал за
+    // последние 15 минут), — в конец: обычно режут вид целиком, и вперёд выходят
+    // другие транспорты (XHTTP, gRPC, WebSocket, Hysteria2). С «той же страной» узлы
+    // этой страны — вперёд.
     final country = _stickCountry;
-    int rank(ProxyNode n) => (failedKinds.contains(n.kind) ? 2 : 0) + (country != null && n.place.code != country ? 1 : 0);
+    int rank(ProxyNode n) =>
+        (failedKinds.contains(n.kind) || _kindFreezing(n.kind) ? 2 : 0) + (country != null && n.place.code != country ? 1 : 0);
     return mergeSortStable(all, (a, b) => rank(a).compareTo(rank(b)));
+  }
+
+  /// Сколько подходящих узлов сейчас отдыхает (после «данные не пошли»).
+  int _restingCount(NetKind? kind) {
+    var count = 0;
+    for (final s in allSources) {
+      if (!isEnabled(s) || !s.fits(kind)) continue;
+      for (final n in nodesBySource[s.id] ?? const <ProxyNode>[]) {
+        if (isResting(n.id) && !isBanned(n)) count++;
+      }
+    }
+    return count;
+  }
+
+  /// Быстрое подключение: последние узлы, через которые реально шли данные.
+  List<ProxyNode> _quickPicks(NetKind? kind, Set<String> tried) {
+    final list = _candidates(kind).where((n) => isProven(n.id) && !tried.contains(n.id)).toList()
+      ..sort((a, b) => checkOf(b.id)!.dataAt.compareTo(checkOf(a.id)!.dataAt));
+    return list.take(3).toList();
   }
 
   /// Виды соединений, через которые в этом поиске не пошли данные.
@@ -1962,12 +2162,32 @@ class AppState extends ChangeNotifier {
       }
     }
 
+    // Быстрый путь: узлы, через которые недавно реально шли данные, — короткая проверка
+    // и сразу подключение, без перебора всего списка.
+    final quick = chosen == null && !force ? _quickPicks(kind, tried) : const <ProxyNode>[];
+    for (final n in quick) {
+      seekStep = 2;
+      notifyListeners();
+      final d = await _realTest(n);
+      if (cancelled()) return;
+      if (d > 0) {
+        _record(n.id, d, real: true);
+        chosen = n;
+        log('Быстрое подключение: ${n.title} — через него недавно шли данные');
+        break;
+      }
+      if (d < 0) _record(n.id, -1, real: true);
+      tried.add(n.id);
+    }
+
     for (var attempt = 0; attempt < 4; attempt++) {
       if (chosen == null) {
         chosen = await _seek(kind, tried, cancelled);
         if (cancelled()) return;
         if (chosen == null) {
-          _fail('Рабочий узел не найден', stopTunnel: started);
+          final resting = _restingCount(kind);
+          _fail(resting > 0 ? 'Рабочий узел не найден — $resting узл. на паузе после блокировки, попробуйте через пару минут' : 'Рабочий узел не найден',
+              stopTunnel: started);
           return;
         }
       }
@@ -1996,8 +2216,8 @@ class AppState extends ChangeNotifier {
   /// Поиск, как Галс в Фарватере:
   /// 1) TCP → короткий запрос через ядро → загрузка больше 16 КБ, Telegram и DNS через узел.
   ///    Первый прошедший всё — наш, самый быстрый ищется потом в фоне (_hunt).
-  /// 2) Если таких нет — пробуем у ответивших другие профили (Firefox, Edge, mux, дробление).
-  /// 3) Если и так нет — берём самый быстрый узел, через который хотя бы идут данные.
+  /// 2) Ответил, но данные не пошли — узел отдыхает, другой профиль у него пробуем позже.
+  /// 3) Если прошедших нет — берём самый быстрый узел, через который хотя бы идут данные.
   Future<ProxyNode?> _seek(NetKind? kind, Set<String> tried, bool Function() cancelled) async {
     final pool = _candidates(kind).where((n) => !tried.contains(n.id)).take(_poolLimit).toList();
     if (pool.isEmpty) return null;
@@ -2008,7 +2228,6 @@ class AppState extends ChangeNotifier {
     final done = Completer<ProxyNode?>();
     final gate = _Gate(probeMeta[probe]!.$2);
     final paths = _Gate(3);
-    final answered = <ProxyNode, int>{};
     final partial = <ProxyNode, int>{};
     final noData = <ProxyNode>[];
     bool over() => cancelled() || done.isCompleted;
@@ -2027,12 +2246,11 @@ class AppState extends ChangeNotifier {
       if (d == 0 || over()) return;
       _record(n.id, d, real: true);
       if (d < 0) return;
-      answered[n] = d;
       if (seekStep < 4) {
         seekStep = 4;
         notifyListeners();
       }
-      final r = await paths.run(() async => over() ? const _PathResult(_Verdict.noData) : await _path(n, cancelled: over));
+      final r = await paths.run(() async => over() ? const _PathResult(_Verdict.skipped) : await _path(n, cancelled: over));
       if (over()) return;
       switch (r.verdict) {
         case _Verdict.ok:
@@ -2046,6 +2264,9 @@ class AppState extends ChangeNotifier {
         case _Verdict.noData:
           noData.add(n);
           failedKinds.add(n.kind);
+          _smokeSink?.call('seek ${n.title}: данные не идут — отдыхает');
+        case _Verdict.skipped:
+          break;
       }
     }).then((_) {
       if (!done.isCompleted) done.complete(null);
@@ -2055,19 +2276,9 @@ class AppState extends ChangeNotifier {
     if (cancelled()) return null;
     if (first != null) return first;
 
-    // Шаг 2: другие профили у ответивших, но не пропустивших данные — сначала быстрые.
-    if (noData.isNotEmpty) {
-      seekStep = 4;
-      log('Ищем рабочий профиль у ${min(6, noData.length)} узлов');
-      notifyListeners();
-      noData.sort((a, b) => (answered[a] ?? 9999).compareTo(answered[b] ?? 9999));
-      for (final n in noData.take(6)) {
-        if (cancelled()) return null;
-        final r = await _path(n, limit: 6, cancelled: cancelled);
-        if (r.verdict == _Verdict.ok) return n;
-        if (r.verdict != _Verdict.noData) partial[n] = r.speed;
-      }
-    }
+    // Узлы, через которые данные не пошли, отдыхают: другие профили у них попробуем
+    // в следующий раз, а не сейчас — во время заморозки это её только продлевает.
+    if (noData.isNotEmpty) log('Данные не пошли через ${noData.length} узл. — они отдохнут несколько минут');
     if (cancelled()) return null;
     // Шаг 3: лучше узел без Telegram/DNS-проверки, чем никакого.
     if (partial.isNotEmpty) {
@@ -2088,6 +2299,10 @@ class AppState extends ChangeNotifier {
         .toList()
       // Сначала из той же подписки (там обычно те же условия), потом остальные — по задержке.
       ..sort((a, b) {
+        // Проверенные данными — первыми: сторож уйдёт туда, где трафик точно шёл.
+        final pa = isProven(a.id) ? 0 : 1;
+        final pb = isProven(b.id) ? 0 : 1;
+        if (pa != pb) return pa.compareTo(pb);
         final sa = a.sourceId == current.sourceId ? 0 : 1;
         final sb = b.sourceId == current.sourceId ? 0 : 1;
         return sa != sb ? sa.compareTo(sb) : latencyOf(a.id).compareTo(latencyOf(b.id));
@@ -2103,7 +2318,8 @@ class AppState extends ChangeNotifier {
               xrayTun: !Native.win && tunEngine == 'xray',
               profile: profiles[n.id],
               win: _winTunnel,
-              tunRoutes: _winRoutes),
+              tunRoutes: _winRoutes,
+              joinConns: _muxFor(n)),
           'test': _testConfig(n, frag: _fragFor(n)),
           'name': n.title,
           'nodeId': n.id,
@@ -2187,7 +2403,8 @@ class AppState extends ChangeNotifier {
         xrayTun: xrayTun,
         profile: profiles[n.id],
         win: win,
-        tunRoutes: _winRoutes);
+        tunRoutes: _winRoutes,
+        joinConns: _muxFor(n));
     final bypass = Native.win ? const <String>[] : {...excludes, if (directRu) ...directApps}.toList();
     _smokeSink?.call('bring ${target.address} tun=$tunEngine');
     // Ждём статус именно этого узла, чтобы не принять «подключено» от предыдущего.
@@ -2232,6 +2449,20 @@ class AppState extends ChangeNotifier {
       if (cancelled()) return false;
     }
     if (!ok) return false;
+    // Короткий ответ ещё не значит, что пойдут данные: ТСПУ может «заморозить»
+    // соединение после первых ~16 КБ. Скачиваем 64 КБ — только тогда считаем, что подключились.
+    var data = await Net.tunnelData();
+    if (cancelled()) return false;
+    if (!data) {
+      data = await Net.tunnelData();
+      if (cancelled()) return false;
+    }
+    _recordData(n.id, data);
+    unawaited(_saveHealth());
+    if (!data) {
+      log('${n.title}: отвечает, но данные не идут (похоже на заморозку) — узел отдохнёт');
+      return false;
+    }
 
     activeId = n.id;
     lastNodeId = n.id;
@@ -2271,6 +2502,22 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  int _proofBase = 0;
+  int _proofAt = 0;
+
+  /// Через туннель пришло больше 2 МБ — узел «проверен данными» (обновляем не чаще раза в 10 минут).
+  void _noteProof() {
+    final id = activeId;
+    if (id == null) return;
+    if (sessionDown < _proofBase) _proofBase = 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (sessionDown - _proofBase < 2 * 1024 * 1024 || now - _proofAt < 10 * 60 * 1000) return;
+    _proofBase = sessionDown;
+    _proofAt = now;
+    _recordData(id, true);
+    unawaited(_saveHealth());
+  }
+
   void _onNative(Object e) {
     if (e is Traffic) {
       if (phase != Phase.on) return;
@@ -2280,6 +2527,7 @@ class AppState extends ChangeNotifier {
       sessionUp = e.upTotal;
       history.add(e.down);
       if (history.length > 28) history.removeAt(0);
+      _noteProof();
       notifyListeners();
     } else if (e is VpnStatus) {
       _applyStatus(e);
@@ -2418,15 +2666,28 @@ class AppState extends ChangeNotifier {
     switch (e.kind) {
       case 'failover':
         final old = activeId;
-        if (old != null && old != e.nodeId) _record(old, -1, real: true);
+        if (old != null && old != e.nodeId) {
+          _record(old, -1, real: true);
+          _recordData(old, false);
+        }
         log('Узел перестал отвечать — сторож переключил на ${e.name ?? 'запасной'}');
         flash('Узел отвалился — переключились на ${e.name ?? 'запасной'}');
+        stopHunt();
+      case 'frozen':
+        // Связь с узлом есть, а данные не идут — так выглядит заморозка ТСПУ.
+        final old = activeId;
+        if (old != null && old != e.nodeId) _recordData(old, false);
+        log('Через узел перестали идти данные (заморозка) — сторож переключил на ${e.name ?? 'запасной'}');
+        flash('Данные не шли — переключились на ${e.name ?? 'запасной'}');
         stopHunt();
       case 'stalled':
         log('Узел не отвечает, запасные тоже — ищем заново');
         if (phase == Phase.on) {
           final n = nodeById(activeId);
-          if (n != null) _record(n.id, -1, real: true);
+          if (n != null) {
+            _record(n.id, -1, real: true);
+            _recordData(n.id, false);
+          }
           unawaited(connect(ignorePin: true));
         }
       case 'switched':
@@ -2601,8 +2862,11 @@ ParsedSubscription _parseOneSync((String, String, Map<String, String>) input) =>
 
 /// Ограничитель одновременных задач.
 class _Gate {
-  _Gate(this.limit);
+  _Gate(this.limit, {this.spacing = Duration.zero});
   final int limit;
+
+  /// Пауза перед тем, как отдать место следующему (чтобы рукопожатия не шли пачкой).
+  final Duration spacing;
   int _busy = 0;
   final _waiting = <Completer<void>>[];
 
@@ -2616,6 +2880,7 @@ class _Gate {
     try {
       return await task();
     } finally {
+      if (spacing > Duration.zero) await Future<void>.delayed(spacing);
       _busy--;
       if (_waiting.isNotEmpty) _waiting.removeAt(0).complete();
     }
@@ -2663,7 +2928,7 @@ String nodeCountLabel(int count) {
   return '$count узлов';
 }
 
-enum _Verdict { ok, noData, noTelegram, noDns }
+enum _Verdict { ok, noData, noTelegram, noDns, skipped }
 
 class _PathResult {
   const _PathResult(this.verdict, {this.speed = 0});

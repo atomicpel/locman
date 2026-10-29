@@ -342,6 +342,9 @@ class WinCore {
   }
 
   static void _startMonitor(int gen, _Spec spec) {
+    _flowUp.fillRange(0, _flowUp.length, 0);
+    _flowDown.fillRange(0, _flowDown.length, 0);
+    _flowSince = DateTime.now().millisecondsSinceEpoch;
     int? lastUp;
     int? lastDown;
     int? baseUp;
@@ -373,6 +376,7 @@ class WinCore {
         lastUp = up;
         lastDown = down;
         _events.add(Traffic(du, dd, up - baseUp!, down - baseDown!));
+        _watchFlow(gen, du, dd);
       } catch (_) {}
     });
   }
@@ -425,6 +429,37 @@ class WinCore {
 
   static bool _switching = false;
 
+  // Заморозка: запросы уходят, а в ответ ничего — проверяем загрузкой и уходим на запасной.
+  static final List<int> _flowUp = List.filled(12, 0);
+  static final List<int> _flowDown = List.filled(12, 0);
+  static int _flowAt = 0;
+  static int _flowSince = 0;
+  static int _lastFreezeCheck = 0;
+
+  static void _watchFlow(int gen, int up, int down) {
+    _flowUp[_flowAt] = up;
+    _flowDown[_flowAt] = down;
+    _flowAt = (_flowAt + 1) % _flowUp.length;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (_flowSince == 0 || now - _flowSince < 20000 || now - _lastFreezeCheck < 60000) return;
+    if (_flowUp.fold(0, (a, b) => a + b) < 1500 || _flowDown.fold(0, (a, b) => a + b) > 1024) return;
+    _lastFreezeCheck = now;
+    unawaited(_freezeCheck(gen));
+  }
+
+  static Future<void> _freezeCheck(int gen) async {
+    final sp = _spec;
+    if (sp == null || _switching || gen != _gen) return;
+    if (await Net.tunnelData() || gen != _gen) return;
+    if (await Net.tunnelData() || gen != _gen) return;
+    _switching = true;
+    try {
+      if (!await _failover(gen, frozen: true)) _events.add(WatchEvent('stalled', null, sp.nodeId));
+    } finally {
+      _switching = false;
+    }
+  }
+
   /// «Переключить узел» из меню у часов: на самый быстрый из запасных.
   static Future<void> switchNext() async {
     final sp = _spec;
@@ -439,7 +474,7 @@ class WinCore {
     }
   }
 
-  static Future<bool> _failover(int gen, {bool manual = false}) async {
+  static Future<bool> _failover(int gen, {bool manual = false, bool frozen = false}) async {
     final sp = _spec;
     if (sp == null) return false;
     final cands = sp.backups.where((b) => b['nodeId'] != sp.nodeId).take(10).toList();
@@ -458,7 +493,7 @@ class WinCore {
       nodeId: b['nodeId'],
       backups: sp.backups.where((x) => x['nodeId'] != b['nodeId']).toList(),
     );
-    _events.add(WatchEvent(manual ? 'switched' : 'failover', b['name'], b['nodeId']));
+    _events.add(WatchEvent(manual ? 'switched' : (frozen ? 'frozen' : 'failover'), b['name'], b['nodeId']));
     unawaited(_connect(next));
     return true;
   }

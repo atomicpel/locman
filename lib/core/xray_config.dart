@@ -112,11 +112,12 @@ class XrayConfig {
     bool udp = true,
     WinTunnel? win,
     List<String> tunRoutes = const [],
+    bool joinConns = false,
   }) {
     final provider = node.isJson ? jsonDecode(node.raw) as Map<String, dynamic> : null;
     final frag = (profile?.frag ?? fragment) && node.canFragment;
     final fp = node.usesFingerprint ? profile?.fp : null;
-    final mux = profile?.mux == true && node.canMux;
+    final mux = (profile?.mux == true || (joinConns && node.muxHelps)) && node.canMux;
     final proxies = provider != null ? List<dynamic>.from(provider['outbounds'] as List) : [_outbound(node, fp: fp, mux: mux)];
     if (frag) {
       // Фрагментация TLS ClientHello: ТСПУ хуже узнаёт рукопожатие. Как в Happ — по умолчанию.

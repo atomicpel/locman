@@ -127,6 +127,27 @@ class ProxyNode {
       (params['flow'] ?? '').trim().isEmpty &&
       !isXhttp;
 
+  /// Объединять ли соединения по умолчанию: там, где транспорт сам этого не делает
+  /// (gRPC и XHTTP уже мультиплексируют).
+  bool get muxHelps => canMux && const {'tcp', 'raw', 'ws', 'httpupgrade'}.contains(transport);
+
+  /// Имя, которое видит ТСПУ в рукопожатии (SNI).
+  String get sniKey {
+    String v(String k) => (params[k] ?? '').trim().toLowerCase();
+    for (final k in const ['sni', 'peer', 'host']) {
+      if (v(k).isNotEmpty) return v(k);
+    }
+    return address.toLowerCase();
+  }
+
+  /// Подсеть сервера: /24 для IPv4, /48 для IPv6, иначе сам домен.
+  String get subnet {
+    final a = address.toLowerCase();
+    if (RegExp(r'^\d+\.\d+\.\d+\.\d+$').hasMatch(a)) return a.substring(0, a.lastIndexOf('.'));
+    if (a.contains(':')) return a.split(':').take(3).join(':');
+    return a;
+  }
+
   /// Вид соединения: провайдер обычно режет целый вид, а не один сервер.
   String get kind => '${protocol.name}/$security/$transport';
 

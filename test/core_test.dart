@@ -404,5 +404,35 @@ void main() {
     final rules = (c['routing']['rules'] as List).cast<Map>();
     expect(rules.any((r) => (r['process'] as List?)?.contains('locman.exe') == true), isTrue);
   });
-}
 
+  test('SNI и подсеть узла — для бережной проверки', () {
+    final n = LinkParser.parse(vless)!;
+    expect(n.sniKey, 'ok.ru');
+    expect(n.subnet, '95.163.1');
+    final d = LinkParser.parse('trojan://pw@Example.COM:443?security=tls#x')!;
+    expect(d.sniKey, 'example.com');
+    expect(d.subnet, 'example.com');
+  });
+
+  test('Объединение соединений: только где помогает и возможно', () {
+    final ws = LinkParser.parse('vless://11111111-2222-3333-4444-555555555555@1.2.3.4:443?security=tls&sni=a.com&type=ws&path=%2Fw#ws')!;
+    final c = jsonDecode(XrayConfig.build(ws, local: local, joinConns: true)) as Map<String, dynamic>;
+    final proxy = (c['outbounds'] as List).cast<Map>().firstWhere((o) => o['tag'] == 'proxy');
+    expect(proxy['mux']?['enabled'], isTrue);
+    final off = jsonDecode(XrayConfig.build(ws, local: local)) as Map<String, dynamic>;
+    expect((off['outbounds'] as List).cast<Map>().firstWhere((o) => o['tag'] == 'proxy')['mux'], isNull);
+    // XHTTP и Vision — без mux
+    final x = jsonDecode(XrayConfig.build(LinkParser.parse(vless)!, local: local, joinConns: true)) as Map<String, dynamic>;
+    expect((x['outbounds'] as List).cast<Map>().firstWhere((o) => o['tag'] == 'proxy')['mux'], isNull);
+    final vision = LinkParser.parse('vless://11111111-2222-3333-4444-555555555555@1.2.3.4:443?security=reality&sni=a.com&pbk=k&flow=xtls-rprx-vision#v')!;
+    expect(vision.muxHelps, isFalse);
+  });
+
+  test('Проверка данными сохраняется в здоровье узла', () {
+    final c = NodeCheck(120, 1000, 0, true, data: -1, dataAt: 2000, dataFails: 2);
+    final back = NodeCheck.fromJson(c.toJson())!;
+    expect([back.delay, back.data, back.dataAt, back.dataFails], [120, -1, 2000, 2]);
+    final old = NodeCheck.fromJson([50, 10, 0, 1])!;
+    expect([old.delay, old.data, old.dataFails], [50, 0, 0]);
+  });
+}
