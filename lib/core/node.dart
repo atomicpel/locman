@@ -67,7 +67,13 @@ class ProxyNode {
     if (insecureFlag && pinnedCert == null) return 'Без проверки сертификата';
     switch (protocol) {
       case Protocol.vless:
-        if (security.isEmpty || security == 'none') return 'Без шифрования';
+        if (security.isEmpty || security == 'none') {
+          // Собственное шифрование VLESS (ML-KEM-768 + X25519, Xray 25.8+) защищает и без TLS.
+          if (hasVlessEncryption) return null;
+          final enc = (params['encryption'] ?? '').trim().toLowerCase();
+          if (enc.isNotEmpty && enc != 'none') return 'Шифрование VLESS в неизвестном формате';
+          return 'Без шифрования: ни TLS, ни Reality, ни шифрования VLESS';
+        }
       case Protocol.trojan:
         if (security == 'none') return 'Без шифрования';
       case Protocol.vmess:
@@ -88,6 +94,11 @@ class ProxyNode {
   }
 
   bool get isInsecure => securityIssue != null;
+
+  static final _vlessEnc = RegExp(r'^mlkem768x25519plus\.(native|xorpub|random)\.(0rtt|1rtt)(\.[A-Za-z0-9_=-]+)+$');
+
+  /// VLESS с поддерживаемым собственным шифрованием (mlkem768x25519plus.…).
+  bool get hasVlessEncryption => protocol == Protocol.vless && _vlessEnc.hasMatch((params['encryption'] ?? '').trim());
 
   /// Подпись транспорта, как в макете: Reality, XHTTP, WS, gRPC, TCP…
   String get transportLabel {

@@ -5,17 +5,26 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ABIS="${ABIS:-arm64-v8a}"
-XRAY_LIB_VERSION="${XRAY_LIB_VERSION:-v26.10.21}"
+XRAY_LIB_VERSION="${XRAY_LIB_VERSION:-v26.10.31}"
+# Коммит тега hev-socks5-tunnel — сборка идёт только из него.
+HEV_COMMIT="d9dca26c7ad0e494492244f0309e80ee583e739e"
 HEV_VERSION="${HEV_VERSION:-2.18.0}"
 
 echo "Ядро Xray ($XRAY_LIB_VERSION)"
 mkdir -p "$ROOT/android/app/libs"
 gh release download "$XRAY_LIB_VERSION" -R 2dust/AndroidLibXrayLite -p 'libv2ray.aar' -D "$ROOT/android/app/libs" --clobber
+# Ядро сверяется с закреплённой контрольной суммой (tools/natives.sha256); не совпала — сборка падает.
+(cd "$ROOT" && sha256sum -c tools/natives.sha256)
 
 echo "TUN-мост (hev-socks5-tunnel $HEV_VERSION)"
 WORK="$(mktemp -d)"
 git clone --depth 1 --branch "$HEV_VERSION" --recursive --shallow-submodules \
   https://github.com/heiher/hev-socks5-tunnel "$WORK/jni"
+got="$(git -C "$WORK/jni" rev-parse HEAD)"
+if [ "$got" != "$HEV_COMMIT" ]; then
+  echo "hev-socks5-tunnel: тег $HEV_VERSION указывает на $got, ожидался $HEV_COMMIT" >&2
+  exit 1
+fi
 patch -p1 -d "$WORK/jni" < "$ROOT/tools/hev-udp-bind.patch"
 (
   cd "$WORK"

@@ -62,7 +62,7 @@ jobs:
           path: |
             android/app/libs/libv2ray.aar
             android/app/src/main/jniLibs
-          key: natives-${{ env.NDK_VERSION }}-${{ hashFiles('tools/fetch_natives.sh', 'tools/hev-udp-bind.patch') }}
+          key: natives-${{ env.NDK_VERSION }}-${{ hashFiles('tools/fetch_natives.sh', 'tools/hev-udp-bind.patch', 'tools/natives.sha256') }}
 
       - name: NDK
         if: steps.natives.outputs.cache-hit != 'true'
@@ -75,6 +75,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash tools/fetch_natives.sh
+
+      - name: Ядро сверяется с закреплённой контрольной суммой (и из кэша тоже)
+        run: sha256sum -c tools/natives.sha256
 
       - name: Платформенные файлы Flutter
         run: |
@@ -215,6 +218,7 @@ jobs:
         run: |
           mkdir -p xray-win
           curl -sSfL -o xray-win/xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY}/Xray-windows-64.zip"
+          sha256sum -c tools/xray-windows.sha256
           (cd xray-win && 7z x -y xray.zip xray.exe wintun.dll LICENSE LICENSE-Wintun > /dev/null && rm xray.zip && ls -la)
 
       - name: Платформенные файлы Flutter
@@ -371,7 +375,7 @@ jobs:
           path: |
             android/app/libs/libv2ray.aar
             android/app/src/main/jniLibs
-          key: natives-x86_64-${{ env.NDK_VERSION }}-${{ hashFiles('tools/fetch_natives.sh', 'tools/hev-udp-bind.patch') }}
+          key: natives-x86_64-${{ env.NDK_VERSION }}-${{ hashFiles('tools/fetch_natives.sh', 'tools/hev-udp-bind.patch', 'tools/natives.sha256') }}
 
       - name: NDK
         if: steps.natives.outputs.cache-hit != 'true'
@@ -384,6 +388,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash tools/fetch_natives.sh
+
+      - name: Ядро сверяется с закреплённой контрольной суммой (и из кэша тоже)
+        run: sha256sum -c tools/natives.sha256
 
       - name: Сборка для эмулятора
         run: |

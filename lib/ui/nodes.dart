@@ -324,6 +324,9 @@ class NodeRow extends StatelessWidget {
                       ],
                     ),
                     Text(node.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: p.text(12, color: p.muted)),
+                    if (node.securityIssue != null)
+                      Text('⚠ ${node.securityIssue}',
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: p.text(12, color: p.danger)),
                   ],
                 ),
               ),

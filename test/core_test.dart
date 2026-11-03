@@ -96,7 +96,14 @@ void main() {
   });
 
   test('небезопасные узлы', () {
-    expect(LinkParser.parse('vless://id@1.2.3.4:443?security=none#x')!.securityIssue, 'Без шифрования');
+    expect(LinkParser.parse('vless://id@1.2.3.4:443?security=none#x')!.securityIssue, startsWith('Без шифрования'));
+    // Собственное шифрование VLESS — без TLS, но защищено
+    final enc = LinkParser.parse('vless://id@1.2.3.4:443?security=none&type=tcp&flow=xtls-rprx-vision'
+        '&encryption=mlkem768x25519plus.native.0rtt.Ab-cD_eF123#x')!;
+    expect(enc.securityIssue, isNull);
+    expect(enc.hasVlessEncryption, isTrue);
+    expect(LinkParser.parse('vless://id@1.2.3.4:443?security=none&encryption=foo.bar#x')!.securityIssue,
+        'Шифрование VLESS в неизвестном формате');
     expect(LinkParser.parse('trojan://p@1.2.3.4:443?allowInsecure=1#x')!.securityIssue, 'Без проверки сертификата');
     final weak = base64.encode(utf8.encode('rc4-md5:pw'));
     expect(LinkParser.parse('ss://$weak@1.2.3.4:8388#x')!.securityIssue, 'Устаревшее шифрование');
