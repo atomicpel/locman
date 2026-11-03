@@ -218,7 +218,7 @@ jobs:
         run: |
           mkdir -p xray-win
           curl -sSfL -o xray-win/xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY}/Xray-windows-64.zip"
-          sha256sum -c tools/xray-windows.sha256
+          tr -d '\r' < tools/xray-windows.sha256 | sha256sum -c
           (cd xray-win && 7z x -y xray.zip xray.exe wintun.dll LICENSE LICENSE-Wintun > /dev/null && rm xray.zip && ls -la)
 
       - name: Платформенные файлы Flutter
