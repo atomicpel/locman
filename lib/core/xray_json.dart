@@ -75,7 +75,7 @@ class XrayJsonParser {
     final port = _int(server, 'port');
     if (address == null || port == null) return null;
 
-    final outbounds = [main, ...original.where((o) => !identical(o, main))].map(_withoutInsecure).toList();
+    final outbounds = sanitize([main, ...original.where((o) => !identical(o, main))]);
     final proxyTags = outbounds
         .where((o) => _protocols.containsKey(_str(o, 'protocol')))
         .map((o) => _str(o, 'tag'))
@@ -144,16 +144,27 @@ class XrayJsonParser {
     );
   }
 
-  static Map _withoutInsecure(Map outbound) {
-    final stream = _obj(outbound, 'streamSettings');
-    final tls = _obj(stream, 'tlsSettings');
-    if (stream == null || tls == null || !tls.containsKey('allowInsecure')) return outbound;
-    return {
-      ...outbound,
-      'streamSettings': {
-        ...stream,
-        'tlsSettings': Map.of(tls)..remove('allowInsecure'),
-      },
-    };
+  /// Что подписке нельзя: выключать проверку сертификата (allowInsecure на любом уровне,
+  /// в том числе в downloadSettings у XHTTP) и заводить выходы, которые пускают трафик
+  /// мимо прокси или обратно в ядро (loopback, dns). Свободный выход (freedom) остаётся
+  /// только для дробления и цепочек — маршрутизацию подписки «Лоцман» не берёт.
+  /// Вызывается и при разборе, и при сборке конфига (у старых сохранённых подписок).
+  static List<Map> sanitize(List outbounds) => [
+        for (final o in outbounds.whereType<Map>())
+          if (!_forbidden.contains(_str(o, 'protocol'))) _strip(o) as Map,
+      ];
+
+  static const _forbidden = {'loopback', 'dns'};
+  static const _insecureKeys = {'allowInsecure', 'allow_insecure', 'insecure', 'skip-cert-verify'};
+
+  static Object? _strip(Object? v) {
+    if (v is Map) {
+      return <String, dynamic>{
+        for (final e in v.entries)
+          if (!_insecureKeys.contains(e.key.toString())) e.key.toString(): _strip(e.value),
+      };
+    }
+    if (v is List) return [for (final x in v) _strip(x)];
+    return v;
   }
 }

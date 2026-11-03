@@ -47,6 +47,7 @@ class _LocmanAppState extends State<LocmanApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) widget.state.onResume();
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) widget.state.onPause();
   }
 
   @override

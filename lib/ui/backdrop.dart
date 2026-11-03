@@ -76,6 +76,7 @@ class BackdropPainter extends CustomPainter {
   static final List<List<double>> _starData = List.generate(140, (_) => List.generate(5, (_) => _rnd.nextDouble()));
   static final List<List<double>> _petalData = List.generate(28, (_) => List.generate(6, (_) => _rnd.nextDouble()));
   static final List<List<double>> _bokehData = List.generate(14, (_) => List.generate(5, (_) => _rnd.nextDouble()));
+  static final List<List<double>> _snowData = List.generate(90, (_) => List.generate(5, (_) => _rnd.nextDouble()));
 
   double get _a => 2 * pi * t;
 
@@ -119,6 +120,11 @@ class BackdropPainter extends CustomPainter {
         _radar(canvas, size);
       case Skin.dot:
         _dots(canvas, size);
+      case Skin.winter:
+        _stars(canvas, size, count: 50, alpha: 0.55);
+        _drifts(canvas, size);
+        _tree(canvas, size);
+        _snow(canvas, size);
     }
   }
 
@@ -402,4 +408,95 @@ class BackdropPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(BackdropPainter old) => old.t != t || old.p != p || old.on != on;
+
+  /// Сугробы внизу экрана.
+  void _drifts(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    for (final (i, c) in [(0, 0.10), (1, 0.16)]) {
+      final base = h * (0.86 + i * 0.05);
+      final path = Path()..moveTo(0, h);
+      path.lineTo(0, base);
+      for (var x = 0.0; x <= w; x += w / 24) {
+        path.lineTo(x, base - 14 * sin(x / w * pi * (2 + i) + i * 1.3) - 6);
+      }
+      path
+        ..lineTo(w, h)
+        ..close();
+      canvas.drawPath(path, Paint()..color = Colors.white.withValues(alpha: c));
+    }
+  }
+
+  /// Ёлка с гирляндой: огоньки мигают по очереди, при включённом VPN — ярче.
+  void _tree(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final cx = w * 0.82;
+    final bottom = h * 0.88;
+    final th = min(h * 0.26, 220.0);
+    final tw = th * 0.62;
+    canvas.drawRect(Rect.fromCenter(center: Offset(cx, bottom + 6), width: tw * 0.12, height: 16),
+        Paint()..color = const Color(0xFF3B2A1E));
+    const tiers = 3;
+    for (var i = 0; i < tiers; i++) {
+      final top = bottom - th + i * th * 0.22;
+      final half = tw * (0.30 + i * 0.12);
+      final low = bottom - th * (0.42 - i * 0.16);
+      final path = Path()
+        ..moveTo(cx, top)
+        ..lineTo(cx + half, low)
+        ..quadraticBezierTo(cx, low + 10, cx - half, low)
+        ..close();
+      canvas.drawPath(path, Paint()..color = Color.lerp(const Color(0xFF0F3B2E), const Color(0xFF175C45), i / tiers)!);
+      // снег на ветках
+      canvas.drawPath(
+        Path()
+          ..moveTo(cx - half * 0.9, low - 2)
+          ..quadraticBezierTo(cx, low + 6, cx + half * 0.9, low - 2),
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.55)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+    // звезда
+    final star = Path();
+    final sy = bottom - th - 4;
+    for (var k = 0; k < 10; k++) {
+      final r = k.isEven ? 9.0 : 4.0;
+      final ang = -pi / 2 + k * pi / 5;
+      final pt = Offset(cx + r * cos(ang), sy + r * sin(ang));
+      k == 0 ? star.moveTo(pt.dx, pt.dy) : star.lineTo(pt.dx, pt.dy);
+    }
+    canvas.drawPath(star..close(), Paint()..color = p.accent2);
+    // гирлянда
+    const colors = [Color(0xFFFFC857), Color(0xFFFF6B6B), Color(0xFF8FD3FF), Color(0xFF7CFFB2)];
+    var n = 0;
+    for (var i = 0; i < tiers; i++) {
+      final y = bottom - th * (0.55 - i * 0.16);
+      final half = tw * (0.22 + i * 0.12);
+      for (var k = 0; k <= 5; k++) {
+        final f = k / 5;
+        final x = cx - half + f * half * 2;
+        final yy = y + sin(f * pi) * 8;
+        final phase = (t * 40 + n * 0.37) % 1;
+        final glow = (0.35 + 0.65 * (0.5 + 0.5 * sin(phase * 2 * pi))) * (on ? 1 : 0.75);
+        final c = colors[n % colors.length];
+        canvas.drawCircle(Offset(x, yy), 7, Paint()..color = c.withValues(alpha: 0.18 * glow));
+        canvas.drawCircle(Offset(x, yy), 2.6, Paint()..color = c.withValues(alpha: glow));
+        n++;
+      }
+    }
+  }
+
+  /// Снежинки падают и покачиваются.
+  void _snow(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    for (final s in _snowData) {
+      final speed = 0.5 + s[2] * 0.9;
+      final y = ((s[1] + t * 5 * speed) % 1.05) * h;
+      final x = (s[0] * w + sin(_a * 6 * (0.4 + s[3]) + s[4] * 6) * 18) % w;
+      final r = 0.8 + s[2] * 2.2;
+      canvas.drawCircle(Offset(x, y), r, Paint()..color = Colors.white.withValues(alpha: 0.35 + s[3] * 0.5));
+    }
+  }
 }

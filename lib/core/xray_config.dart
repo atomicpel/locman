@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'node.dart';
 import 'ru.dart';
+import 'xray_json.dart';
 
 /// Локальные входы Xray: SOCKS для TUN-моста и HTTP для запросов самого приложения.
 /// Оба только на 127.0.0.1 и с одноразовым паролем — чужие приложения ими не воспользуются.
@@ -118,7 +119,9 @@ class XrayConfig {
     final frag = (profile?.frag ?? fragment) && node.canFragment;
     final fp = node.usesFingerprint ? profile?.fp : null;
     final mux = (profile?.mux == true || (joinConns && node.muxHelps)) && node.canMux;
-    final proxies = provider != null ? List<dynamic>.from(provider['outbounds'] as List) : [_outbound(node, fp: fp, mux: mux)];
+    final proxies = provider != null
+        ? List<dynamic>.from(XrayJsonParser.sanitize(provider['outbounds'] as List))
+        : [_outbound(node, fp: fp, mux: mux)];
     if (frag) {
       // Фрагментация TLS ClientHello: ТСПУ хуже узнаёт рукопожатие. Как в Happ — по умолчанию.
       final proxy = proxies.first as Map<String, dynamic>;

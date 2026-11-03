@@ -8,7 +8,49 @@ const manualSource = 'manual';
 /// Разбор ссылок vless://, vmess://, trojan://, ss://, hysteria2:// (hy2://).
 /// Логика повторяет проверенный разборщик Farvater (GPL-3.0).
 class LinkParser {
-  static ProxyNode? parse(String line, {String sourceId = manualSource}) {
+  static ProxyNode? parse(String line, {String sourceId = manualSource}) => parseWhy(line, sourceId: sourceId).$1;
+
+  /// Шифрования Shadowsocks, которые понимает Xray.
+  static const ssMethods = {
+    'aes-128-gcm',
+    'aes-256-gcm',
+    'chacha20-poly1305',
+    'chacha20-ietf-poly1305',
+    'xchacha20-poly1305',
+    'xchacha20-ietf-poly1305',
+    '2022-blake3-aes-128-gcm',
+    '2022-blake3-aes-256-gcm',
+    '2022-blake3-chacha20-poly1305',
+    'none',
+    'plain',
+  };
+
+  /// Разбор с причиной отказа: узел, который ядро всё равно не сможет поднять,
+  /// не добавляется, а пользователь видит, почему.
+  static (ProxyNode?, String?) parseWhy(String line, {String sourceId = manualSource}) {
+    final n = _parse(line, sourceId);
+    if (n == null) return (null, null);
+    final why = problem(n);
+    return why == null ? (n, null) : (null, why);
+  }
+
+  /// Почему узел несовместим (null — всё в порядке).
+  static String? problem(ProxyNode n) {
+    if (n.isJson) return null;
+    if (n.security == 'reality' && (n.params['pbk'] ?? '').trim().isEmpty) {
+      return 'Reality без открытого ключа (pbk)';
+    }
+    if (n.protocol == Protocol.shadowsocks) {
+      final m = (n.params['method'] ?? '').trim().toLowerCase();
+      if (!ssMethods.contains(m)) return 'Shadowsocks: шифрование «${m.isEmpty ? '?' : m}» не поддерживается';
+    }
+    if ((n.protocol == Protocol.vless || n.protocol == Protocol.vmess) && n.secret.trim().isEmpty) {
+      return 'нет идентификатора пользователя (UUID)';
+    }
+    return null;
+  }
+
+  static ProxyNode? _parse(String line, String sourceId) {
     final raw = line.trim();
     if (raw.isEmpty || raw.startsWith('#')) return null;
     final sep = raw.indexOf('://');
@@ -72,7 +114,10 @@ class LinkParser {
   }
 
   static ProxyNode? _vmess(String raw, String sourceId) {
-    final encoded = _beforeHash(raw.substring(raw.indexOf('://') + 3));
+    final body = raw.substring(raw.indexOf('://') + 3);
+    final encoded = _beforeHash(body);
+    final hash = body.indexOf('#');
+    final fragment = hash < 0 ? '' : pctDecode(body.substring(hash + 1)).trim();
     final payload = decodeBase64(encoded);
     if (payload == null) return null;
     final obj = jsonDecode(payload);
@@ -103,7 +148,11 @@ class LinkParser {
       if (v.isNotEmpty && v != 'none') params[param] = v;
     });
     final withoutName = Map<String, dynamic>.from(obj)..remove('ps');
-    final name = s('ps');
+    // Имя: «ps» внутри (бывает в %-кодировке), иначе #имя после ссылки, иначе «remark».
+    var name = s('ps');
+    if (name.contains('%')) name = pctDecode(name);
+    if (name.isEmpty) name = fragment;
+    if (name.isEmpty) name = s('remark').isNotEmpty ? s('remark') : s('remarks');
     return ProxyNode(
       id: stableId(jsonEncode(withoutName)),
       protocol: Protocol.vmess,

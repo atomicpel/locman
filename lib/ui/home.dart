@@ -352,7 +352,10 @@ class _UpdateBanner extends StatelessWidget {
           const SizedBox(width: 12),
           SizedBox(
             width: 120,
-            child: PillButton(label: progress != null ? 'Качаем…' : 'Обновить', primary: true, onTap: progress != null ? null : s.installUpdate),
+            child: PillButton(
+                label: progress != null ? 'Отменить' : 'Обновить',
+                primary: progress == null,
+                onTap: progress != null ? s.cancelUpdate : s.installUpdate),
           ),
         ],
       ),

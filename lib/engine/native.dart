@@ -297,6 +297,34 @@ class Native {
       ? Clipboard.setData(ClipboardData(text: text))
       : _core.invokeMethod('share', {'text': text, 'title': title});
 
+  /// Сохранить текст в файл через системный выбор места. true — сохранили.
+  static Future<bool> saveFile(String name, String text) async {
+    if (win) {
+      final path = await WinCore.pickFile(save: true, name: name);
+      if (path == null) return false;
+      await File(path).writeAsString(text, flush: true);
+      return true;
+    }
+    return (await _core.invokeMethod<bool>('saveFile', {'name': name, 'text': text})) ?? false;
+  }
+
+  /// Выбрать файл и прочитать его как текст. null — ничего не выбрали.
+  static Future<String?> openFile() async {
+    if (win) {
+      final path = await WinCore.pickFile(save: false);
+      if (path == null) return null;
+      final f = File(path);
+      if (await f.length() > 8 * 1024 * 1024) throw const FileSystemException('файл слишком большой');
+      return f.readAsString();
+    }
+    return _core.invokeMethod<String>('openFile');
+  }
+
+  /// Поделиться установленным приложением (Android — сам APK из системы).
+  static Future<void> shareApp() => win
+      ? Clipboard.setData(const ClipboardData(text: 'https://github.com/atomicpel/locman/releases/latest'))
+      : _core.invokeMethod('shareApk');
+
   static Future<void> openBattery() => _core.invokeMethod('openBattery');
   static Future<void> openAutostart() => _core.invokeMethod('openAutostart');
   static Future<void> openVpnSettings() => _core.invokeMethod('openVpnSettings');

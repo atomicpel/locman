@@ -30,8 +30,14 @@ class QsTileService : TileService() {
         super.onStopListening()
     }
 
+    private var lastClick = 0L
+
     override fun onClick() {
         super.onClick()
+        // Быстрые повторные нажатия не должны включать и тут же выключать VPN.
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastClick < 900) return
+        lastClick = now
         val state = VpnBus.state
         if (state is VpnState.Connected || state is VpnState.Connecting) {
             LocmanVpnService.stop(this)

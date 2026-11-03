@@ -138,6 +138,11 @@ class Palette {
             bg: 0xFF0F1215, surface: 0xE61C1F24, surface2: 0xE624282F, fg: 0xFFE6E8EB, muted: 0xFF9AA1AB,
             accent: 0xFF4CC2FF, accent2: 0xFF3DDC97, accentFg: 0xFF041018, border: 0xFF323842, danger: 0xFFFF6B6B,
             sky: [0xFF0F1215, 0xFF12171C, 0xFF0F1215], rCard: 13.6, rPill: 11.2);
+      case Skin.winter:
+        return _p(skin, true,
+            bg: 0xFF060B1A, surface: 0xCC0E1730, surface2: 0xCC14203E, fg: 0xFFEAF2FF, muted: 0xFF94A6C6,
+            accent: 0xFF8FD3FF, accent2: 0xFFFFC857, accentFg: 0xFF06121F, border: 0x6E2E4470, danger: 0xFFFF6B6B,
+            sky: [0xFF040817, 0xFF0A1530, 0xFF142446], rCard: 20);
       case Skin.dot:
         return _p(skin, true,
             bg: 0xFF0A0A0A, surface: 0xEB141414, surface2: 0xEB1B1B1B, fg: 0xFFF2F2F2, muted: 0xFF8A8A8A,

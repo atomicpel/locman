@@ -47,6 +47,8 @@ class _NodesScreenState extends State<NodesScreen> {
     final onlyAlive = s.filter == 'live' || ((s.filter == 'reality' || s.filter == 'xhttp') && s.hasFreshChecks);
     final list = s.visibleNodes().where((n) {
       if (onlyAlive && s.latencyOf(n.id) <= 0) return false;
+      if (s.filter == 'fav' && !s.isFavorite(n)) return false;
+      if (s.serviceFilter != null && s.serviceOf(n.id, s.serviceFilter!)?.kind != 'ok') return false;
       if (s.filter == 'reality' && !n.isReality) return false;
       if (s.filter == 'xhttp' && !n.isXhttp) return false;
       if (q.isEmpty) return true;
@@ -87,8 +89,45 @@ class _NodesScreenState extends State<NodesScreen> {
             Segment<String>(
               value: s.filter,
               onChanged: s.setFilter,
-              options: const [('all', 'Все'), ('live', 'Живые'), ('reality', 'Reality'), ('xhttp', 'XHTTP')],
+              options: const [('all', 'Все'), ('live', 'Живые'), ('fav', '★'), ('reality', 'Reality'), ('xhttp', 'XHTTP')],
             ),
+            if (s.filter == 'fav' && s.favorites.isEmpty) ...[
+              const SizedBox(height: 8),
+              Text('Здесь будут узлы со звёздочкой: откройте узел и нажмите «В избранное».', style: p.text(13, color: p.muted)),
+            ],
+            if (s.services.isNotEmpty && s.activeServices.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final e in s.activeServices.entries)
+                    Tag(
+                      s.serviceFilter == e.key ? '✓ ${e.value.$1}' : e.value.$1,
+                      accent: s.serviceFilter == e.key,
+                      onTap: () => s.setServiceFilter(e.key),
+                    ),
+                ],
+              ),
+              if (s.serviceFilter != null) ...[
+                const SizedBox(height: 6),
+                Text('Только узлы, через которые открывается ${s.activeServices[s.serviceFilter]?.$1 ?? 'сервис'}. '
+                    'Проверяется ответ страницы; после входа в аккаунт может отличаться.',
+                    style: p.text(13, color: p.muted)),
+              ],
+            ],
+            if (s.serviceStatus != null) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: Text(s.serviceStatus!, style: p.text(13, color: p.muted))),
+                  TextButton(
+                    onPressed: s.stopServiceCheck,
+                    child: Text('Остановить', style: p.text(13, weight: FontWeight.w600, color: p.accent)),
+                  ),
+                ],
+              ),
+            ],
             if ((s.filter == 'reality' || s.filter == 'xhttp') && !s.hasFreshChecks) ...[
               const SizedBox(height: 8),
               Text('Нажмите проверку вверху — останутся только отвечающие узлы.', style: p.text(13, color: p.muted)),
@@ -283,8 +322,27 @@ class NodeRow extends StatelessWidget {
     final resting = s.isResting(node.id);
     final proven = !resting && s.isProven(node.id);
     final restMin = resting ? ((s.restUntil(node.id) - DateTime.now().millisecondsSinceEpoch) / 60000).ceil() : 0;
+    final spoken = [
+      node.place.city ?? node.title,
+      node.protocol.title,
+      if (s.isFavorite(node)) 'в избранном',
+      if (resting) 'на паузе после блокировки' else if (latency > 0) '$latency миллисекунд' else if (latency < 0) 'нет ответа',
+      if (proven) 'данные идут',
+      if (s.activeId == node.id && s.phase == Phase.on) 'подключён',
+    ].join(', ');
+    return Semantics(
+      button: true,
+      label: spoken,
+      hint: 'Открыть действия с узлом',
+      excludeSemantics: true,
+      child: _row(context, p, latency, checking, resting, proven, restMin),
+    );
+  }
+
+  Widget _row(BuildContext context, Palette p, int latency, bool checking, bool resting, bool proven, int restMin) {
     return InkWell(
       onTap: () => showNodeSheet(context, s, node),
+      onLongPress: () => showNodeSheet(context, s, node),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 56),
         child: Padding(
@@ -313,6 +371,10 @@ class NodeRow extends StatelessWidget {
                           child: Text(node.place.city ?? node.title,
                               maxLines: 1, overflow: TextOverflow.ellipsis, style: p.text(15, weight: FontWeight.w500)),
                         ),
+                        if (s.isFavorite(node)) ...[
+                          const SizedBox(width: 6),
+                          Icon(Icons.star_rounded, size: 15, color: p.accent, semanticLabel: 'в избранном'),
+                        ],
                         if (s.pinnedId == node.id) ...[
                           const SizedBox(width: 6),
                           Icon(Icons.push_pin_rounded, size: 14, color: p.accent),
@@ -324,6 +386,25 @@ class NodeRow extends StatelessWidget {
                       ],
                     ),
                     Text(node.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: p.text(12, color: p.muted)),
+                    if (s.services[node.id] != null && s.activeServices.isNotEmpty)
+                      Text.rich(
+                        TextSpan(children: [
+                          for (final (i, e) in s.activeServices.entries.indexed) ...[
+                            if (i > 0) TextSpan(text: '  ', style: p.text(12)),
+                            TextSpan(
+                              text: '${e.value.$1} ${_mark(s.serviceOf(node.id, e.key)?.kind)}',
+                              style: p.text(12,
+                                  color: switch (s.serviceOf(node.id, e.key)?.kind) {
+                                    'ok' => p.accent,
+                                    null => p.muted,
+                                    _ => p.danger,
+                                  }),
+                            ),
+                          ],
+                        ]),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     if (node.securityIssue != null)
                       Text('⚠ ${node.securityIssue}',
                           maxLines: 1, overflow: TextOverflow.ellipsis, style: p.text(12, color: p.danger)),
@@ -353,3 +434,10 @@ class NodeRow extends StatelessWidget {
     );
   }
 }
+
+/// ✓ — открывается, ✗ — нет, ? — не проверяли (подробности — в карточке узла).
+String _mark(String? kind) => switch (kind) {
+      'ok' => '✓',
+      null => '?',
+      _ => '✗',
+    };

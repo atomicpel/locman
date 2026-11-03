@@ -9,6 +9,7 @@ import 'package:locman/core/qr.dart';
 import 'package:locman/core/routes.dart';
 import 'package:locman/core/subscription.dart';
 import 'package:locman/core/xray_config.dart';
+import 'package:locman/core/xray_json.dart';
 import 'package:locman/engine/net.dart';
 import 'package:locman/state.dart';
 
@@ -106,7 +107,9 @@ void main() {
         'Шифрование VLESS в неизвестном формате');
     expect(LinkParser.parse('trojan://p@1.2.3.4:443?allowInsecure=1#x')!.securityIssue, 'Без проверки сертификата');
     final weak = base64.encode(utf8.encode('rc4-md5:pw'));
-    expect(LinkParser.parse('ss://$weak@1.2.3.4:8388#x')!.securityIssue, 'Устаревшее шифрование');
+    // Ядро такое не поднимет — узел не добавляется, а причина видна
+    expect(LinkParser.parse('ss://$weak@1.2.3.4:8388#x'), isNull);
+    expect(LinkParser.parseWhy('ss://$weak@1.2.3.4:8388#x').$2, contains('rc4-md5'));
     expect(LinkParser.parse('hysteria2://p@hy.example.com:443/?insecure=1&pinSHA256=AB:CD#x')!.securityIssue, isNull);
   });
 
@@ -441,5 +444,47 @@ void main() {
     expect([back.delay, back.data, back.dataAt, back.dataFails], [120, -1, 2000, 2]);
     final old = NodeCheck.fromJson([50, 10, 0, 1])!;
     expect([old.delay, old.data, old.dataFails], [50, 0, 0]);
+  });
+
+  test('Причины отказа при импорте', () {
+    final sub = SubscriptionParser.parse(
+        '$vless\nvless://11111111-2222-3333-4444-555555555555@1.2.3.9:443?security=reality&sni=a.ru#nokey\n'
+        'ss://${base64.encode(utf8.encode('aes-256-cfb:pw'))}@1.2.3.4:8388#cfb',
+        'src');
+    expect(sub.nodes.length, 1);
+    expect(sub.rejected.keys, containsAll(['Reality без открытого ключа (pbk)', 'Shadowsocks: шифрование «aes-256-cfb» не поддерживается']));
+  });
+
+  test('Имя VMess: ps, иначе #имя', () {
+    String vm(Map m) => 'vmess://${base64.encode(utf8.encode(jsonEncode(m)))}';
+    final base = {'add': '1.2.3.4', 'port': '443', 'id': '11111111-2222-3333-4444-555555555555', 'net': 'tcp'};
+    expect(LinkParser.parse('${vm(base)}#%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0')!.name, 'Москва');
+    expect(LinkParser.parse(vm({...base, 'ps': 'Рига'}))!.name, 'Рига');
+    expect(LinkParser.parse(vm(base))!.name, '1.2.3.4:443');
+  });
+
+  test('JSON-подписка не выключает проверку сертификата и не уводит мимо прокси', () {
+    final out = XrayJsonParser.sanitize([
+      {
+        'tag': 'proxy',
+        'protocol': 'vless',
+        'streamSettings': {
+          'network': 'xhttp',
+          'tlsSettings': {'allowInsecure': true, 'serverName': 'a.com'},
+          'xhttpSettings': {
+            'extra': {
+              'downloadSettings': {
+                'tlsSettings': {'allowInsecure': true},
+              },
+            },
+          },
+        },
+      },
+      {'tag': 'back', 'protocol': 'loopback', 'settings': {'inboundTag': 'socks'}},
+      {'tag': 'frag', 'protocol': 'freedom'},
+    ]);
+    expect(out.length, 2);
+    expect(jsonEncode(out).contains('allowInsecure'), isFalse);
+    expect(jsonEncode(out).contains('a.com'), isTrue);
   });
 }

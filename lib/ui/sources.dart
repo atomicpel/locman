@@ -182,6 +182,10 @@ class _SourceCard extends StatelessWidget {
                   ),
               ],
             ),
+            if (info?.rejected != null) ...[
+              const SizedBox(height: 6),
+              Text('Не добавлены: ${info!.rejected}', style: p.text(12, color: p.muted)),
+            ],
             const SizedBox(height: 8),
             Row(
               children: [

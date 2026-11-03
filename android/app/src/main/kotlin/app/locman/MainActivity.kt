@@ -28,9 +28,13 @@ class MainActivity : FlutterActivity() {
         const val REQ_VPN = 41
         const val REQ_NOTIFY = 42
         const val REQ_SCAN = 43
+        const val REQ_SAVE = 44
+        const val REQ_OPEN = 45
     }
 
     private var pendingScan: MethodChannel.Result? = null
+    private var pendingSave: Pair<MethodChannel.Result, ByteArray>? = null
+    private var pendingOpen: MethodChannel.Result? = null
 
     private val main = Handler(Looper.getMainLooper())
     private val background = Executors.newFixedThreadPool(48) { r -> Thread(r, "locman-call").apply { isDaemon = true } }
@@ -262,6 +266,45 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+            "saveFile" -> {
+                pendingSave?.first?.success(false)
+                pendingSave = result to call.argument<String>("text")!!.toByteArray()
+                val pick = Intent(Intent.ACTION_CREATE_DOCUMENT)
+                    .addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType("application/json")
+                    .putExtra(Intent.EXTRA_TITLE, call.argument<String>("name") ?: "locman-backup.json")
+                try {
+                    startActivityForResult(pick, REQ_SAVE)
+                } catch (e: Exception) {
+                    pendingSave = null
+                    result.error("save", e.message, null)
+                }
+            }
+
+            "openFile" -> {
+                pendingOpen?.success(null)
+                pendingOpen = result
+                val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+                try {
+                    startActivityForResult(pick, REQ_OPEN)
+                } catch (e: Exception) {
+                    pendingOpen = null
+                    result.error("open", e.message, null)
+                }
+            }
+
+            "shareApk" -> {
+                // Делимся установленным APK прямо из системы: без подписок и настроек, без копии в кэше.
+                val uri = ApkProvider.uri(this)
+                val send = Intent(Intent.ACTION_SEND)
+                    .setType(ApkProvider.MIME)
+                    .putExtra(Intent.EXTRA_STREAM, uri)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                send.clipData = android.content.ClipData.newRawUri("Лоцман", uri)
+                open(Intent.createChooser(send, "Поделиться «Лоцманом»"))
+                result.success(null)
+            }
+
             "qr" -> {
                 val text = call.argument<String>("text")!!
                 val size = call.argument<Int>("size") ?: 720
@@ -363,6 +406,37 @@ class MainActivity : FlutterActivity() {
                 resultCode == RESULT_OK -> r?.success(data?.getStringExtra(ScanActivity.EXTRA_TEXT))
                 data?.getStringExtra("error") == "camera" -> r?.error("camera", "нет разрешения на камеру", null)
                 else -> r?.success(null)
+            }
+            return
+        }
+        if (requestCode == REQ_SAVE) {
+            val (r, bytes) = pendingSave ?: return
+            pendingSave = null
+            val uri = data?.data
+            if (resultCode != RESULT_OK || uri == null) {
+                r.success(false)
+                return
+            }
+            async(r) {
+                contentResolver.openOutputStream(uri, "wt")!!.use { it.write(bytes) }
+                true
+            }
+            return
+        }
+        if (requestCode == REQ_OPEN) {
+            val r = pendingOpen ?: return
+            pendingOpen = null
+            val uri = data?.data
+            if (resultCode != RESULT_OK || uri == null) {
+                r.success(null)
+                return
+            }
+            async(r) {
+                contentResolver.openInputStream(uri)!!.use { input ->
+                    val bytes = input.readBytes()
+                    check(bytes.size <= 8 * 1024 * 1024) { "файл слишком большой" }
+                    String(bytes, Charsets.UTF_8)
+                }
             }
             return
         }

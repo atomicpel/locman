@@ -29,6 +29,58 @@ class IpInfo {
 }
 
 /// Что показала проверка пути через узел.
+/// Загрузку остановили кнопкой «Отменить».
+class DownloadCancelled implements Exception {
+  const DownloadCancelled();
+  @override
+  String toString() => 'загрузка отменена';
+}
+
+/// Ответ страницы сервиса через узел.
+class PageCheck {
+  const PageCheck(this.kind, {this.detail});
+
+  /// ok, region, bot, timeout, conn, tls, http
+  final String kind;
+  final String? detail;
+
+  static const _region = [
+    'unavailable-in-region',
+    'unavailable_in_region',
+    'unsupported_country',
+    'unsupported-country',
+    'unsupported country',
+    'not available in your country',
+    'not available in your region',
+    'not supported in your country',
+    "isn't supported in your country",
+    'isn’t supported in your country',
+    'not currently supported in your country',
+    "isn't currently supported in your country",
+    'isn’t currently supported in your country',
+    'not available in your location',
+  ];
+  static const _bot = [
+    'cf-chl',
+    'challenge-platform',
+    'just a moment...',
+    '/sorry/index',
+    'unusual traffic',
+    'g-recaptcha',
+    'hcaptcha',
+    'attention required',
+  ];
+
+  static PageCheck classify(int status, String url, String body) {
+    final u = url.toLowerCase();
+    final b = body.toLowerCase();
+    if (_region.any((m) => u.contains(m) || b.contains(m))) return const PageCheck('region');
+    if (_bot.any((m) => u.contains(m) || b.contains(m))) return const PageCheck('bot');
+    if (status >= 200 && status < 400) return const PageCheck('ok');
+    return PageCheck('http', detail: 'ответ $status');
+  }
+}
+
 class PathCheck {
   const PathCheck({this.data = false, this.telegram = false, this.dns, this.speed = 0});
   final bool data;
@@ -173,8 +225,10 @@ class Net {
     File target, {
     void Function(double)? onProgress,
     bool viaTunnel = false,
+    bool Function()? cancelled,
   }) async {
     final client = _client(viaTunnel: viaTunnel, timeout: const Duration(seconds: 20));
+    var ok = false;
     try {
       final req = await client.getUrl(Uri.parse(url));
       final resp = await req.close();
@@ -184,6 +238,7 @@ class Net {
       final sink = target.openWrite();
       try {
         await for (final chunk in resp.timeout(const Duration(seconds: 30))) {
+          if (cancelled?.call() == true) throw const DownloadCancelled();
           sink.add(chunk);
           read += chunk.length;
           if (total > 0) onProgress?.call(read / total);
@@ -191,9 +246,28 @@ class Net {
       } finally {
         await sink.close();
       }
+      if (total > 0 && read != total) throw const HttpException('файл скачался не полностью');
+      ok = true;
     } finally {
       client.close(force: true);
+      // Недокачанный файл не оставляем.
+      if (!ok) await target.delete().catchError((_) => target);
     }
+  }
+
+  /// Адрес локальной сети или самого устройства (для своих адресов проверки).
+  static bool isPrivateHost(String host) {
+    final h = host.toLowerCase();
+    if (_isLocal(h) || h.endsWith('.local') || h.endsWith('.lan') || h.endsWith('.home')) return true;
+    final m = RegExp(r'^(\d+)\.(\d+)\.\d+\.\d+$').firstMatch(h);
+    if (m == null) {
+      final v6 = h.replaceAll('[', '');
+      return v6.contains(':') && (v6.startsWith('fc') || v6.startsWith('fd') || v6.startsWith('fe80'));
+    }
+    final a = int.parse(m.group(1)!);
+    final b = int.parse(m.group(2)!);
+    return a == 10 || a == 127 || a == 0 || (a == 172 && b >= 16 && b < 32) || (a == 192 && b == 168) ||
+        (a == 100 && b >= 64 && b < 128) || (a == 169 && b == 254);
   }
 
   static bool _isLocal(String host) {
@@ -259,6 +333,52 @@ class Net {
       return false;
     } finally {
       client.close(force: true);
+    }
+  }
+
+  /// Открываем страницу сервиса через локальный прокси узла (как браузер), следуем
+  /// перенаправлениям сами — адрес назначения тоже говорит о блокировке по региону.
+  static Future<PageCheck> fetchPage(LocalProxy p, String url) async {
+    final c = _proxied(p, timeout: const Duration(seconds: 10))
+      ..userAgent = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36';
+    var current = Uri.parse(url);
+    try {
+      for (var hop = 0; hop < 6; hop++) {
+        final req = await c.getUrl(current).timeout(const Duration(seconds: 12));
+        req.followRedirects = false;
+        req.headers.set(HttpHeaders.acceptHeader, 'text/html,application/xhtml+xml,*/*;q=0.8');
+        req.headers.set(HttpHeaders.acceptLanguageHeader, 'en-US,en;q=0.8');
+        final resp = await req.close().timeout(const Duration(seconds: 12));
+        final location = resp.headers.value(HttpHeaders.locationHeader);
+        if (resp.isRedirect && location != null) {
+          await resp.drain<void>().catchError((_) {});
+          final next = current.resolve(location);
+          if (PageCheck._region.any((m) => next.toString().toLowerCase().contains(m))) return const PageCheck('region');
+          current = next;
+          continue;
+        }
+        final bytes = <int>[];
+        await for (final chunk in resp.timeout(const Duration(seconds: 10))) {
+          bytes.addAll(chunk);
+          if (bytes.length > 300 * 1024) break;
+        }
+        return PageCheck.classify(resp.statusCode, current.toString(), utf8.decode(bytes, allowMalformed: true));
+      }
+      return const PageCheck('http', detail: 'слишком много перенаправлений');
+    } on TimeoutException {
+      return const PageCheck('timeout');
+    } on HandshakeException catch (e) {
+      return PageCheck('tls', detail: e.message);
+    } on TlsException catch (e) {
+      return PageCheck('tls', detail: e.message);
+    } on SocketException catch (e) {
+      return PageCheck('conn', detail: e.message);
+    } on HttpException catch (e) {
+      return PageCheck('conn', detail: e.message);
+    } catch (e) {
+      return PageCheck('conn', detail: e.toString());
+    } finally {
+      c.close(force: true);
     }
   }
 

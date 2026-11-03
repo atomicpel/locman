@@ -9,7 +9,9 @@
 #include <shellapi.h>
 #include <wininet.h>
 #include <bcrypt.h>
+#include <commdlg.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -22,6 +24,7 @@
 #pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "comdlg32.lib")
 
 namespace LocmanWin {
 namespace {
@@ -543,6 +546,27 @@ void HandleCall(const flutter::MethodCall<flutter::EncodableValue>& call,
       result->Success();
     } else {
       result->Success(flutter::EncodableValue(hex));
+    }
+  } else if (name == "pickFile") {
+    // Окно «Сохранить как» / «Открыть» для резервной копии; вернём путь или ничего.
+    const bool save = Bool(a, "save", false);
+    std::wstring path = Widen(Str(a, "name"));
+    std::vector<wchar_t> buf(32768, L'\0');
+    if (!path.empty() && path.size() < buf.size()) std::copy(path.begin(), path.end(), buf.begin());
+    static const wchar_t kFilter[] = L"JSON\0*.json\0*.*\0*.*\0\0";
+    OPENFILENAMEW ofn{};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = g_hwnd;
+    ofn.lpstrFilter = kFilter;
+    ofn.lpstrFile = buf.data();
+    ofn.nMaxFile = static_cast<DWORD>(buf.size());
+    ofn.lpstrDefExt = L"json";
+    ofn.Flags = OFN_NOCHANGEDIR | OFN_PATHMUSTEXIST | (save ? OFN_OVERWRITEPROMPT : OFN_FILEMUSTEXIST);
+    const BOOL ok = save ? GetSaveFileNameW(&ofn) : GetOpenFileNameW(&ofn);
+    if (ok) {
+      result->Success(flutter::EncodableValue(Narrow(std::wstring(buf.data()))));
+    } else {
+      result->Success();
     }
   } else if (name == "setAutostart") {
     SetAutostart(Bool(a, "enable", false), Bool(a, "elevated", false));

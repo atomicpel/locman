@@ -121,6 +121,10 @@ class WinCore {
   static Future<void> setCloseToTray(bool on) => _call('setCloseToTray', {'on': on});
   static Future<void> openUrl(String url) => _call('openUrl', {'url': url});
 
+  /// Окно Windows «Сохранить как» / «Открыть»: путь или null.
+  static Future<String?> pickFile({required bool save, String name = ''}) =>
+      _call<String>('pickFile', {'save': save, 'name': name});
+
   static Future<void> setAutostart(bool on, {required bool elevated}) =>
       _call('setAutostart', {'enable': on, 'elevated': elevated});
 

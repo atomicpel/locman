@@ -18,13 +18,74 @@ import 'engine/native.dart';
 import 'engine/net.dart';
 import 'engine/win_core.dart';
 
-enum Skin { glass, aurora, cosmos, ocean, sunset, sakura, island, paper, signal, dot }
+enum Skin { glass, aurora, cosmos, ocean, sunset, sakura, island, paper, signal, dot, winter }
 
 enum Phase { off, seek, on, fail }
 
 enum AppTab { home, nodes, sources, more }
 
-enum SettingsPage { look, link, apps, safe, probe, radio, about }
+enum SettingsPage { look, link, apps, safe, probe, services, traffic, backup, radio, about }
+
+/// Сервисы, страницы которых можно проверить через узлы.
+const serviceMeta = {
+  'gemini': ('Gemini', 'https://gemini.google.com/app'),
+  'chatgpt': ('ChatGPT', 'https://chatgpt.com/'),
+  'claude': ('Claude', 'https://claude.ai/login'),
+  'youtube': ('YouTube', 'https://www.youtube.com/'),
+};
+
+/// Что значит результат проверки страницы сервиса.
+const serviceKindText = {
+  'ok': 'страница открывается',
+  'region': 'сервис сообщает об ограничении по региону',
+  'bot': 'сервис запросил проверку «не робот ли вы»',
+  'timeout': 'истекло время ожидания',
+  'conn': 'ошибка соединения',
+  'tls': 'ошибка TLS',
+  'http': 'необычный ответ сервера',
+};
+
+/// Состав резервной копии — показываем перед восстановлением.
+class BackupPreview {
+  BackupPreview(this.settings, this.security, this.created, this.version);
+  final Map<String, dynamic> settings;
+  final Map<String, dynamic> security;
+  final DateTime? created;
+  final String? version;
+
+  List<Map> get _mine => ((settings['mine'] as List?) ?? const []).whereType<Map>().toList();
+  int get subscriptions => _mine.where((m) => m['links'] == null).length;
+  int get keySets => _mine.where((m) => m['links'] != null).length;
+  int get keys => _mine.fold(0, (a, m) => a + (m['links'] is String ? (m['links'] as String).split('\n').where((l) => l.trim().isNotEmpty).length : 0));
+  int get favorites => ((settings['favorites'] as List?) ?? const []).length;
+  bool get hasSecurity => security.isNotEmpty;
+
+  static BackupPreview? parse(String text) {
+    try {
+      final j = jsonDecode(text);
+      if (j is! Map || j['app'] != 'locman' || j['settings'] is! Map) return null;
+      return BackupPreview(
+        Map<String, dynamic>.from(j['settings'] as Map),
+        Map<String, dynamic>.from((j['security'] as Map?) ?? const {}),
+        DateTime.tryParse(j['created']?.toString() ?? ''),
+        j['version'] as String?,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+class ServiceResult {
+  ServiceResult(this.kind, this.at, [this.detail]);
+  final String kind;
+  final int at;
+  final String? detail;
+
+  List<Object?> toJson() => [kind, at, detail];
+  static ServiceResult? fromJson(Object? j) =>
+      j is List && j.length >= 2 ? ServiceResult(j[0].toString(), (j[1] as num).toInt(), j.length > 2 ? j[2] as String? : null) : null;
+}
 
 const skinMeta = {
   Skin.glass: ('Стекло', 'Прозрачные капсулы и плывущие пятна света', null),
@@ -37,6 +98,7 @@ const skinMeta = {
   Skin.paper: ('Чернила', 'Бумага, тушь и засечки', null),
   Skin.signal: ('Сигнал', 'Тёмный экран и луч радара', 'dark'),
   Skin.dot: ('Точка', 'Монохром, точки и красный акцент', 'dark'),
+  Skin.winter: ('Зимняя ночь', 'Снег, сугробы и ёлка с гирляндой', 'dark'),
 };
 
 /// auto — сами смотрим, allow — БС (белые списки), block — ЧС (обычные блокировки).
@@ -107,7 +169,7 @@ class NodeCheck {
 }
 
 class SourceInfo {
-  SourceInfo({this.updatedAt = 0, this.error, this.title, this.announce, this.usage, this.skipped = 0});
+  SourceInfo({this.updatedAt = 0, this.error, this.title, this.announce, this.usage, this.skipped = 0, this.rejected});
   int updatedAt;
   String? error;
   String? title;
@@ -115,7 +177,11 @@ class SourceInfo {
   String? usage;
   int skipped;
 
+  /// Почему часть узлов не добавлена (Reality без ключа, неподдерживаемое шифрование…).
+  String? rejected;
+
   Map<String, dynamic> toJson() => {
+        if (rejected != null) 'rejected': rejected,
         'updatedAt': updatedAt,
         if (error != null) 'error': error,
         if (title != null) 'title': title,
@@ -133,6 +199,7 @@ class SourceInfo {
           announce: j['announce'] as String?,
           usage: j['usage'] as String?,
           skipped: (j['skipped'] as num?)?.toInt() ?? 0,
+          rejected: j['rejected'] as String?,
         );
 }
 
@@ -239,6 +306,16 @@ class AppState extends ChangeNotifier {
 
   /// Узлы, которые с объединением соединений не работают (сервер его не понимает).
   Set<String> noMux = {};
+
+  /// Избранные узлы (звёздочка).
+  Set<String> favorites = {};
+
+  /// Проверка страниц сервисов после «Проверить все».
+  bool servicesOn = false;
+  Set<String> servicesEnabled = {'gemini', 'chatgpt', 'claude', 'youtube'};
+
+  /// Свой адрес для проверки (только https).
+  String? serviceCustom;
   String? pinnedId;
   String? lastNodeId;
   Set<String> excludes = {};
@@ -330,6 +407,8 @@ class AppState extends ChangeNotifier {
       _save();
     }
     await _loadHealth();
+    await _loadTraffic();
+    await _loadServices();
     await _loadCatalog();
     await _loadCachedSubscriptions();
     ready = true;
@@ -481,6 +560,12 @@ class AppState extends ChangeNotifier {
     if (autoUpdateCheck && (charging || level < 0 || level > 20)) await checkUpdate(quiet: true);
   }
 
+  /// Ушли из приложения: сохраняем расход трафика, проверку сервисов останавливаем.
+  void onPause() {
+    unawaited(_saveTraffic());
+    stopServiceCheck();
+  }
+
   void onResume() {
     unawaited(_background());
     Native.state().then(_applyStatus).catchError((_) {});
@@ -502,6 +587,10 @@ class AppState extends ChangeNotifier {
   Future<void> _loadSettings() async {
     final j = await files!.readJson('state.json');
     if (j == null) return;
+    _applySettings(j);
+  }
+
+  void _applySettings(Map<String, dynamic> j) {
     T pick<T>(String key, T fallback) => j[key] is T ? j[key] as T : fallback;
     onboarded = pick('onboarded', false);
     publicOn = pick('publicOn', true);
@@ -542,6 +631,12 @@ class AppState extends ChangeNotifier {
     noFrag = ((j['noFrag'] as List?) ?? const []).map((e) => e.toString()).toSet();
     joinConns = j['joinConns'] != false;
     noMux = ((j['noMux'] as List?) ?? const []).map((e) => e.toString()).toSet();
+    favorites = ((j['favorites'] as List?) ?? const []).map((e) => e.toString()).toSet();
+    servicesOn = j['servicesOn'] == true;
+    if (j['servicesEnabled'] is List) {
+      servicesEnabled = (j['servicesEnabled'] as List).map((e) => e.toString()).toSet();
+    }
+    serviceCustom = j['serviceCustom'] as String?;
     pinnedId = j['pinnedId'] as String?;
     lastNodeId = j['lastNodeId'] as String?;
     excludes = ((j['excludes'] as List?) ?? const []).map((e) => e.toString()).toSet();
@@ -566,7 +661,10 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _flushSave() async {
-    await files?.writeJson('state.json', {
+    await files?.writeJson('state.json', _settingsJson());
+  }
+
+  Map<String, dynamic> _settingsJson() => {
         'onboarded': onboarded,
         'publicOn': publicOn,
         'skin': skin.name,
@@ -605,6 +703,10 @@ class AppState extends ChangeNotifier {
         'noFrag': noFrag.take(800).toList(),
         'joinConns': joinConns,
         'noMux': noMux.take(800).toList(),
+        'favorites': favorites.toList(),
+        'servicesOn': servicesOn,
+        'servicesEnabled': servicesEnabled.toList(),
+        if (serviceCustom != null) 'serviceCustom': serviceCustom,
         'pinnedId': pinnedId,
         'lastNodeId': lastNodeId,
         'excludes': excludes.toList(),
@@ -613,7 +715,96 @@ class AppState extends ChangeNotifier {
         'intervals': intervals,
         'mine': mine.map((s) => s.toJson()).toList(),
         'journal': journal.map((e) => [e.at, e.text]).toList(),
-      });
+      };
+
+  // ---------- Резервная копия ----------
+
+  /// Что в копию не идёт: принадлежит этому устройству.
+  static const _deviceKeys = {
+    'onboarded', 'hwid', 'seenVersion', 'legalAccepted', 'lastNodeId', 'journal', 'noFrag', 'noMux', //
+    'winMode', 'winAutostart', 'winTray',
+  };
+
+  /// Настройки безопасности переносятся только по отдельному согласию.
+  static const _securityKeys = {'hideInsecure', 'sendHwid', 'banned', 'excludes', 'directRu', 'winLeakBlock', 'hideDupes'};
+
+  /// Копия настроек, подписок, ручных узлов и избранного. Файл не шифруется:
+  /// в нём ссылки подписок и ключи узлов.
+  String backupJson() {
+    final all = _settingsJson()..removeWhere((k, _) => _deviceKeys.contains(k));
+    final security = {for (final k in _securityKeys) if (all.containsKey(k)) k: all.remove(k)};
+    return const JsonEncoder.withIndent(' ').convert({
+      'app': 'locman',
+      'format': 1,
+      'created': DateTime.now().toIso8601String(),
+      'version': info?.versionName,
+      'settings': all,
+      'security': security,
+    });
+  }
+
+  Future<void> saveBackup() async {
+    final d = DateTime.now();
+    final name = 'locman-backup-${dayKey(d)}.json';
+    try {
+      final ok = await Native.saveFile(name, backupJson());
+      if (ok) {
+        log('Резервная копия сохранена');
+        flash('Резервная копия сохранена');
+      }
+    } catch (e) {
+      flash('Не удалось сохранить: ${_short(e)}');
+    }
+  }
+
+  /// Разобранная копия, ждущая подтверждения (показываем её состав).
+  BackupPreview? backupPreview;
+
+  Future<void> openBackup() async {
+    String? text;
+    try {
+      text = await Native.openFile();
+    } catch (e) {
+      flash('Не удалось открыть: ${_short(e)}');
+      return;
+    }
+    if (text == null) return;
+    final preview = BackupPreview.parse(text);
+    if (preview == null) {
+      flash('Это не резервная копия «Лоцмана»');
+      return;
+    }
+    _set(() => backupPreview = preview);
+  }
+
+  void cancelBackup() => _set(() => backupPreview = null);
+
+  /// Восстановление: свои источники и избранное добавляются к текущим,
+  /// остальные настройки заменяются. Настройки безопасности — только если [withSecurity].
+  Future<void> restoreBackup({required bool withSecurity}) async {
+    final b = backupPreview;
+    if (b == null) return;
+    final current = _settingsJson();
+    final incoming = Map<String, dynamic>.from(b.settings)..removeWhere((k, _) => _deviceKeys.contains(k));
+    final merged = {...current, ...incoming, if (withSecurity) ...b.security};
+    final known = {for (final m in mine) m.id};
+    merged['mine'] = [
+      ...mine.map((m) => m.toJson()),
+      for (final m in (incoming['mine'] as List? ?? const []).whereType<Map>())
+        if (!known.contains(m['id'])) m,
+    ];
+    merged['favorites'] = {...favorites, ...((incoming['favorites'] as List?) ?? const []).map((e) => e.toString())}.toList();
+    final before = known.length;
+    _applySettings(merged);
+    backupPreview = null;
+    _save();
+    for (final src in mine.where((x) => x.links != null)) {
+      nodesBySource[src.id] ??= SubscriptionParser.parse(src.links!, src.id).nodes;
+    }
+    notifyListeners();
+    log('Восстановлено из копии: источников добавлено ${mine.length - before}${withSecurity ? ', с настройками безопасности' : ''}');
+    flash('Восстановлено из копии');
+    unawaited(_refreshMany(mine.where((x) => x.hasUrl && !known.contains(x.id)).toList()));
   }
 
   void _set(VoidCallback change) {
@@ -1019,7 +1210,11 @@ class AppState extends ChangeNotifier {
       final body = r.body;
       final parsed = await compute(_parseOneSync, (body, s.id, r.headers));
       if (parsed.nodes.isEmpty) {
-        throw HttpException(body.trimLeft().startsWith('<') ? 'вместо подписки пришла веб-страница' : 'в подписке сейчас нет узлов');
+        throw HttpException(body.trimLeft().startsWith('<')
+            ? 'вместо подписки пришла веб-страница'
+            : parsed.rejectedText != null
+                ? 'узлы не подходят: ${parsed.rejectedText}'
+                : 'в подписке сейчас нет узлов');
       }
       await files!.writeText('subs/${s.id}.txt', body);
       nodesBySource[s.id] = parsed.nodes;
@@ -1029,6 +1224,7 @@ class AppState extends ChangeNotifier {
         ..title = parsed.title
         ..announce = parsed.announce
         ..skipped = parsed.skipped.values.fold(0, (a, b) => a + b)
+        ..rejected = parsed.rejectedText
         ..usage = _usageText(parsed.usage);
       if (s.isMine && parsed.updateIntervalHours != null && !intervals.containsKey(s.id)) {
         final h = parsed.updateIntervalHours!;
@@ -1164,8 +1360,10 @@ class AppState extends ChangeNotifier {
     }
 
     var keys = 0;
+    String? rejected;
     if (keyLines.isNotEmpty) {
       final parsed = SubscriptionParser.parse(keyLines.join('\n'), 'probe');
+      rejected = parsed.rejectedText;
       if (parsed.nodes.isNotEmpty) {
         final links = parsed.nodes.map((n) => n.raw).join('\n');
         final id = 'mine-${stableId(links)}';
@@ -1195,6 +1393,7 @@ class AppState extends ChangeNotifier {
             'Попросите у владельца подписки обычную ссылку https://…';
       }
       if (duplicates > 0) return 'Эти источники уже добавлены';
+      if (rejected != null) return 'Ключи не подходят: $rejected';
       return 'Не нашёл ни ссылок подписок, ни ключей vless, vmess, trojan, ss или hy2';
     }
 
@@ -1213,6 +1412,7 @@ class AppState extends ChangeNotifier {
       if (keys > 0) 'ключей: $keys',
       if (duplicates > 0) 'уже были: $duplicates',
       if (crypt > 0) 'зашифрованных Happ пропущено: $crypt',
+      if (rejected != null) 'не подошли: $rejected',
     ];
     log('Добавлено — ${parts.join(', ')}');
     flash('Добавлено — ${parts.join(', ')}');
@@ -1794,6 +1994,7 @@ class AppState extends ChangeNotifier {
     final proven = list.where((n) => isProven(n.id)).length;
     log('Проверены узлы: отвечают $alive из ${list.length}, данные идут через $proven');
     flash('Отвечают $alive из ${list.length} · данные идут через $proven');
+    if (servicesOn && !stopped()) unawaited(checkServices());
   }
 
   int _lastNotify = 0;
@@ -1815,6 +2016,169 @@ class AppState extends ChangeNotifier {
     }
 
     await Future.wait(List.generate(min(concurrency, items.length), (_) => worker()));
+  }
+
+  // ---------- Проверка страниц сервисов ----------
+
+  /// Узел → сервис → результат.
+  final Map<String, Map<String, ServiceResult>> services = {};
+
+  /// Что сейчас проверяется (для строки прогресса); null — проверка не идёт.
+  String? serviceStatus;
+
+  /// Показать только узлы, через которые открывается этот сервис.
+  String? serviceFilter;
+  int _serviceGen = 0;
+
+  /// Включённые сервисы: id → (название, адрес).
+  Map<String, (String, String)> get activeServices => {
+        for (final e in serviceMeta.entries)
+          if (servicesEnabled.contains(e.key)) e.key: e.value,
+        if (serviceCustom != null && servicesEnabled.contains('custom'))
+          'custom': (Uri.tryParse(serviceCustom!)?.host ?? 'Свой адрес', serviceCustom!),
+      };
+
+  void setServicesOn(bool v) => _set(() => servicesOn = v);
+
+  void toggleService(String id) =>
+      _set(() => servicesEnabled.contains(id) ? servicesEnabled.remove(id) : servicesEnabled.add(id));
+
+  /// null — сохранено; иначе почему адрес не подходит.
+  String? setServiceCustom(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty) {
+      _set(() {
+        serviceCustom = null;
+        servicesEnabled.remove('custom');
+      });
+      return null;
+    }
+    final u = Uri.tryParse(t);
+    if (u == null || u.scheme != 'https' || u.host.isEmpty) return 'Нужен адрес вида https://…';
+    if (Net.isPrivateHost(u.host)) return 'Адреса локальной сети проверять нельзя';
+    _set(() {
+      serviceCustom = u.toString();
+      servicesEnabled.add('custom');
+    });
+    return null;
+  }
+
+  void setServiceFilter(String? id) => _set(() => serviceFilter = serviceFilter == id ? null : id);
+
+  ServiceResult? serviceOf(String nodeId, String serviceId) => services[nodeId]?[serviceId];
+
+  void stopServiceCheck() {
+    if (serviceStatus == null) return;
+    _serviceGen++;
+    serviceStatus = null;
+    log('Проверка сервисов остановлена');
+    notifyListeners();
+  }
+
+  Future<void> _loadServices() async {
+    final j = await files!.readJson('services.json');
+    if (j == null) return;
+    final cutoff = DateTime.now().millisecondsSinceEpoch - 24 * 3600 * 1000;
+    j.forEach((node, v) {
+      if (v is! Map) return;
+      final m = <String, ServiceResult>{};
+      v.forEach((k, r) {
+        final res = ServiceResult.fromJson(r);
+        if (res != null && res.at > cutoff) m[k.toString()] = res;
+      });
+      if (m.isNotEmpty) services[node] = m;
+    });
+  }
+
+  Future<void> _saveServices() async => files?.writeJson('services.json', {
+        for (final e in services.entries) e.key: {for (final r in e.value.entries) r.key: r.value.toJson()},
+      });
+
+  /// Страницы выбранных сервисов через не больше 10 ответивших узлов с наименьшей задержкой:
+  /// по очереди, всего до 90 секунд. Один адрес через один узел — не чаще раза в 30 минут.
+  Future<void> checkServices() async {
+    final list = activeServices;
+    if (list.isEmpty || serviceStatus != null) return;
+    final gen = ++_serviceGen;
+    bool stopped() => gen != _serviceGen;
+    final deadline = DateTime.now().add(const Duration(seconds: 90));
+    final nodes = (visibleNodes()
+            .where((n) => latencyOf(n.id) > 0 && !isResting(n.id) && !_sameSubAsActive(n))
+            .toList()
+          ..sort((a, b) => latencyOf(a.id).compareTo(latencyOf(b.id))))
+        .take(10)
+        .toList();
+    if (nodes.isEmpty) return;
+    var done = 0;
+    for (final n in nodes) {
+      if (stopped() || DateTime.now().isAfter(deadline)) break;
+      serviceStatus = 'Проверяем сервисы: узел ${++done} из ${nodes.length}';
+      notifyListeners();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final due = {
+        for (final e in list.entries)
+          if (now - (serviceOf(n.id, e.key)?.at ?? 0) > 30 * 60 * 1000) e.key: e.value.$2,
+      };
+      if (due.isEmpty) continue;
+      await _checkServicesOn(n, due, stopped, deadline);
+    }
+    if (stopped()) return;
+    serviceStatus = null;
+    unawaited(_saveServices());
+    final ok = {for (final id in list.keys) id: nodes.where((n) => serviceOf(n.id, id)?.kind == 'ok').length};
+    log('Сервисы: ${ok.entries.map((e) => '${list[e.key]!.$1} ${e.value}').join(', ')} (из ${nodes.length} узлов)');
+    notifyListeners();
+  }
+
+  Future<void> _checkServicesOn(ProxyNode n, Map<String, String> due, bool Function() stopped, DateTime deadline) async {
+    Future<void> run(LocalProxy p) async {
+      for (final e in due.entries) {
+        if (stopped() || DateTime.now().isAfter(deadline)) return;
+        final r = await Net.fetchPage(p, e.value);
+        if (stopped()) return;
+        (services[n.id] ??= {})[e.key] = ServiceResult(r.kind, DateTime.now().millisecondsSinceEpoch, r.detail);
+        notifyListeners();
+      }
+    }
+
+    // Узел, через который подключены, проверяем через сам туннель.
+    final tunnel = Net.tunnel;
+    if (phase == Phase.on && n.id == activeId && tunnel != null) return run(tunnel);
+    await _gentle(n, () async {
+      final local = LocalProxy(
+        socksPort: await Net.freePort(),
+        httpPort: await Net.freePort(),
+        user: Net.token(12),
+        pass: Net.token(24),
+      );
+      final config = XrayConfig.build(n,
+          local: local,
+          directRu: false,
+          dns: dns,
+          fragment: _fragFor(n),
+          profile: profiles[n.id],
+          udp: false,
+          joinConns: _muxFor(n));
+      int? id;
+      try {
+        id = await Native.probeStart(config);
+        if (id == null) return;
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        await run(local);
+      } catch (_) {
+        // узел не поднялся — результатов просто нет
+      } finally {
+        if (id != null) unawaited(Native.probeStop(id).catchError((_) {}));
+      }
+    });
+  }
+
+  bool isFavorite(ProxyNode n) => favorites.contains(n.id);
+
+  void toggleFavorite(ProxyNode n) {
+    final on = !favorites.contains(n.id);
+    _set(() => on ? favorites.add(n.id) : favorites.remove(n.id));
+    flash(on ? '${n.title} — в избранном' : '${n.title} убран из избранного');
   }
 
   void togglePin(ProxyNode n) {
@@ -2502,6 +2866,82 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---------- Расход трафика по дням (хранится только на устройстве) ----------
+
+  /// День «гггг-мм-дд» → [отправлено, получено], байты.
+  final Map<String, List<int>> trafficDays = {};
+  int _trafficSession = 0;
+  int _trafficUp = 0;
+  int _trafficDown = 0;
+  int _trafficSavedAt = 0;
+
+  static String dayKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _loadTraffic() async {
+    final j = await files!.readJson('traffic.json');
+    if (j == null) return;
+    (j['days'] as Map?)?.forEach((k, v) {
+      if (v is List && v.length == 2) trafficDays[k.toString()] = [(v[0] as num).toInt(), (v[1] as num).toInt()];
+    });
+    final mark = j['mark'] as Map?;
+    if (mark != null) {
+      _trafficSession = (mark['session'] as num?)?.toInt() ?? 0;
+      _trafficUp = (mark['up'] as num?)?.toInt() ?? 0;
+      _trafficDown = (mark['down'] as num?)?.toInt() ?? 0;
+    }
+  }
+
+  Future<void> _saveTraffic() async {
+    if (files == null) return;
+    final cutoff = dayKey(DateTime.now().subtract(const Duration(days: 62)));
+    trafficDays.removeWhere((k, _) => k.compareTo(cutoff) < 0);
+    _trafficSavedAt = DateTime.now().millisecondsSinceEpoch;
+    await files!.writeJson('traffic.json', {
+      'days': trafficDays,
+      'mark': {'session': _trafficSession, 'up': _trafficUp, 'down': _trafficDown},
+    });
+  }
+
+  /// Счётчики сеанса растут; в день идёт прирост. Новый сеанс или сброс счётчиков
+  /// (переключение узла) — считаем от нуля.
+  void _noteTraffic(Traffic e) {
+    final session = connectedAt ?? 0;
+    var du = e.upTotal;
+    var dd = e.downTotal;
+    if (session == _trafficSession && e.upTotal >= _trafficUp && e.downTotal >= _trafficDown) {
+      du = e.upTotal - _trafficUp;
+      dd = e.downTotal - _trafficDown;
+    }
+    _trafficSession = session;
+    _trafficUp = e.upTotal;
+    _trafficDown = e.downTotal;
+    if (du <= 0 && dd <= 0) return;
+    final day = trafficDays.putIfAbsent(dayKey(DateTime.now()), () => [0, 0]);
+    day[0] += du;
+    day[1] += dd;
+    if (DateTime.now().millisecondsSinceEpoch - _trafficSavedAt > 60000) unawaited(_saveTraffic());
+  }
+
+  /// Расход за последние [days] дней, от старых к новым: (день, отправлено, получено).
+  List<(DateTime, int, int)> trafficFor(int days) {
+    final today = DateTime.now();
+    return [
+      for (var i = days - 1; i >= 0; i--)
+        () {
+          final d = DateTime(today.year, today.month, today.day - i);
+          final v = trafficDays[dayKey(d)] ?? const [0, 0];
+          return (d, v[0], v[1]);
+        }(),
+    ];
+  }
+
+  void clearTraffic() {
+    _set(trafficDays.clear);
+    unawaited(_saveTraffic());
+    flash('История трафика очищена');
+  }
+
   int _proofBase = 0;
   int _proofAt = 0;
 
@@ -2528,6 +2968,7 @@ class AppState extends ChangeNotifier {
       history.add(e.down);
       if (history.length > 28) history.removeAt(0);
       _noteProof();
+      _noteTraffic(e);
       notifyListeners();
     } else if (e is VpnStatus) {
       _applyStatus(e);
@@ -2791,6 +3232,14 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  bool _updateCancel = false;
+
+  /// Отменить загрузку обновления: запрос обрывается, недокачанный файл удаляется.
+  void cancelUpdate() {
+    if (updateProgress == null) return;
+    _updateCancel = true;
+  }
+
   Future<void> installUpdate() async {
     final u = update;
     if (u == null || updateProgress != null) return;
@@ -2800,6 +3249,7 @@ class AppState extends ChangeNotifier {
     }
     updateProgress = 0;
     updateError = null;
+    _updateCancel = false;
     notifyListeners();
     final target = File('${info!.cacheDir}/updates/locman-${u.versionCode}.${Native.win ? 'exe' : 'apk'}');
     try {
@@ -2808,12 +3258,15 @@ class AppState extends ChangeNotifier {
       var done = false;
       for (final via in Net.routes) {
         try {
-          await Net.download(u.url, target, viaTunnel: via, onProgress: (p) {
+          // Через VPN оборвалось — пробуем напрямую (Net.routes: сначала туннель, потом без него).
+          await Net.download(u.url, target, viaTunnel: via, cancelled: () => _updateCancel, onProgress: (p) {
             updateProgress = p;
             _throttledNotify();
           });
           done = true;
           break;
+        } on DownloadCancelled {
+          rethrow;
         } catch (e) {
           last = e;
         }
@@ -2831,11 +3284,14 @@ class AppState extends ChangeNotifier {
       } else if (!started) {
         flash('Разрешите установку из «Лоцмана» и нажмите «Обновить» ещё раз');
       }
+    } on DownloadCancelled {
+      flash('Загрузка обновления отменена');
     } catch (e) {
       updateError = _short(e);
       flash('Обновление: $updateError');
     } finally {
       updateProgress = null;
+      _updateCancel = false;
       notifyListeners();
     }
   }

@@ -57,6 +57,10 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="locman" android:host="import" />
             </intent-filter>
+            <!-- Долгое нажатие на плитку в шторке открывает приложение -->
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
         </activity>
 
         <activity
@@ -115,6 +119,12 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <provider
+            android:name=".ApkProvider"
+            android:authorities="${applicationId}.apk"
+            android:exported="false"
+            android:grantUriPermissions="true" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

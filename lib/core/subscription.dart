@@ -21,6 +21,7 @@ class ParsedSubscription {
     required this.notices,
     required this.skipped,
     required this.usage,
+    this.rejected = const {},
   });
 
   final String? title;
@@ -32,6 +33,13 @@ class ParsedSubscription {
   final List<String> notices;
   final Map<String, int> skipped;
   final Usage? usage;
+
+  /// Узлы, которые ядро не поднимет: причина → сколько таких.
+  final Map<String, int> rejected;
+
+  /// «Reality без ключа — 2, …» для подсказки у источника.
+  String? get rejectedText =>
+      rejected.isEmpty ? null : rejected.entries.map((e) => e.value > 1 ? '${e.key} — ${e.value}' : e.key).join('; ');
 }
 
 class SubscriptionParser {
@@ -48,6 +56,7 @@ class SubscriptionParser {
     final nodes = <String, ProxyNode>{};
     final notices = <String>[];
     final skipped = <String, int>{};
+    final rejected = <String, int>{};
     final announce = <String>[];
 
     void add(ProxyNode n) {
@@ -85,7 +94,11 @@ class SubscriptionParser {
           }
           continue;
         }
-        final node = LinkParser.parse(line, sourceId: sourceId);
+        final (node, why) = LinkParser.parseWhy(line, sourceId: sourceId);
+        if (why != null) {
+          rejected[why] = (rejected[why] ?? 0) + 1;
+          continue;
+        }
         if (node == null) {
           final sep = line.indexOf('://');
           if (sep > 0 && sep <= 16) {
@@ -108,6 +121,7 @@ class SubscriptionParser {
       notices: notices,
       skipped: skipped,
       usage: _usage(meta['subscription-userinfo']),
+      rejected: rejected,
     );
   }
 

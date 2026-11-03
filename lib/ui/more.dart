@@ -14,6 +14,9 @@ String settingsTitle(SettingsPage page) => switch (page) {
       SettingsPage.apps => 'Мимо узла',
       SettingsPage.safe => 'Безопасность',
       SettingsPage.probe => 'Проверка узлов',
+      SettingsPage.services => 'Проверка сервисов',
+      SettingsPage.traffic => 'Расход трафика',
+      SettingsPage.backup => 'Резервная копия',
       SettingsPage.radio => 'Скрытые настройки сети',
       SettingsPage.about => 'О клиенте',
     };
@@ -30,6 +33,9 @@ class MoreScreen extends StatelessWidget {
       SettingsPage.apps => _AppsPage(s: s),
       SettingsPage.safe => _SafePage(s: s),
       SettingsPage.probe => _ProbePage(s: s),
+      SettingsPage.services => _ServicesPage(s: s),
+      SettingsPage.traffic => _TrafficPage(s: s),
+      SettingsPage.backup => _BackupPage(s: s),
       SettingsPage.radio => _RadioPage(s: s),
       SettingsPage.about => _AboutPage(s: s),
       null => _MoreIndex(s: s),
@@ -50,6 +56,10 @@ class _MoreIndex extends StatelessWidget {
       if (!Native.win) (SettingsPage.apps, 'Мимо узла', s.excludes.isEmpty ? 'Приложения без туннеля' : 'Выбрано: ${s.excludes.length}'),
       (SettingsPage.safe, 'Безопасность', 'DNS ${dnsMeta[s.dns]} и скрытие слабых узлов'),
       (SettingsPage.probe, 'Проверка узлов', probeMeta[s.probe]!.$1),
+      (SettingsPage.services, 'Проверка сервисов',
+          s.servicesOn ? s.activeServices.values.map((e) => e.$1).join(', ') : 'Gemini, ChatGPT, Claude, YouTube — выключена'),
+      (SettingsPage.traffic, 'Расход трафика', 'Сегодня ${formatBytes(_today(s))} · по дням за неделю и месяц'),
+      (SettingsPage.backup, 'Резервная копия', 'Подписки, ключи, избранное и настройки — в файл'),
       if (!Native.win) (SettingsPage.radio, 'Скрытые настройки сети', 'Экран *#*#4636#*#*: тип сети, LTE/5G'),
       (SettingsPage.about, 'О клиенте', s.update != null ? 'Доступна версия ${s.update!.versionName}' : 'Версия, обновления, журнал'),
     ];
@@ -79,6 +89,311 @@ class _MoreIndex extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
+        ],
+        Pressable(
+          onTap: () async {
+            await Native.shareApp();
+            if (Native.win) s.flash('Ссылка на страницу загрузки скопирована');
+          },
+          label: 'Поделиться приложением',
+          child: Panel(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Поделиться приложением', style: p.text(16, weight: FontWeight.w500)),
+                      Text(
+                          Native.win
+                              ? 'Скопировать ссылку на страницу загрузки'
+                              : 'Сам установленный APK — без подписок и настроек',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: p.text(14, color: p.muted)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.ios_share_rounded, size: 18, color: p.muted),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+int _today(AppState s) {
+  final t = s.trafficFor(1).first;
+  return t.$2 + t.$3;
+}
+
+class _ServicesPage extends StatefulWidget {
+  const _ServicesPage({required this.s});
+  final AppState s;
+
+  @override
+  State<_ServicesPage> createState() => _ServicesPageState();
+}
+
+class _ServicesPageState extends State<_ServicesPage> {
+  late final TextEditingController _url = TextEditingController(text: widget.s.serviceCustom ?? '');
+  String? _error;
+
+  @override
+  void dispose() {
+    _url.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final p = PaletteScope.of(context);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        SettingRow(
+          title: 'Проверять страницы сервисов',
+          line: 'После «Проверить все» открываем страницы выбранных сервисов через не более чем 10 ответивших узлов '
+              'с наименьшей задержкой — по очереди, до 90 секунд. Один адрес через один узел — не чаще раза в 30 минут. '
+              'При уходе из приложения проверка останавливается.',
+          control: PillSwitch(on: s.servicesOn, onChanged: s.setServicesOn, label: 'Проверять страницы сервисов'),
+        ),
+        const SizedBox(height: 8),
+        for (final e in serviceMeta.entries) ...[
+          SettingRow(
+            title: e.value.$1,
+            line: e.value.$2,
+            control: PillSwitch(
+                on: s.servicesEnabled.contains(e.key), onChanged: (_) => s.toggleService(e.key), label: e.value.$1),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (s.serviceCustom != null) ...[
+          SettingRow(
+            title: Uri.tryParse(s.serviceCustom!)?.host ?? 'Свой адрес',
+            line: s.serviceCustom!,
+            control: PillSwitch(
+                on: s.servicesEnabled.contains('custom'), onChanged: (_) => s.toggleService('custom'), label: 'Свой адрес'),
+          ),
+          const SizedBox(height: 8),
+        ],
+        const SizedBox(height: 8),
+        const SectionTitle('Свой адрес', line: 'Любая страница по https://. Пусто — убрать.'),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _url,
+          keyboardType: TextInputType.url,
+          style: p.text(14),
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: 'https://example.com/',
+            hintStyle: p.text(14, color: p.muted),
+            errorText: _error,
+            filled: true,
+            fillColor: p.surface,
+            enabledBorder:
+                OutlineInputBorder(borderRadius: BorderRadius.circular(p.rPill), borderSide: BorderSide(color: p.border)),
+            focusedBorder:
+                OutlineInputBorder(borderRadius: BorderRadius.circular(p.rPill), borderSide: BorderSide(color: p.accent)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        PillButton(
+          label: 'Сохранить адрес',
+          onTap: () {
+            final err = s.setServiceCustom(_url.text);
+            setState(() => _error = err);
+            if (err == null) s.flash(_url.text.trim().isEmpty ? 'Свой адрес убран' : 'Адрес сохранён');
+          },
+        ),
+        const SizedBox(height: 16),
+        PillButton(
+          label: s.serviceStatus ?? 'Проверить сейчас',
+          onTap: s.serviceStatus != null || !s.servicesOn ? null : s.checkServices,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Результат виден в списке узлов (✓ открывается, ✗ нет, ? не проверялся), по нему можно оставить только '
+          'подходящие узлы. Подробности — долгое нажатие на узел: истекло время, ошибка соединения или TLS, '
+          'проверка на робота, ограничение по региону. Проверяется ответ страницы; после входа в аккаунт сервис '
+          'может работать иначе.',
+          style: p.text(13, color: p.muted),
+        ),
+      ],
+    );
+  }
+}
+
+class _TrafficPage extends StatefulWidget {
+  const _TrafficPage({required this.s});
+  final AppState s;
+
+  @override
+  State<_TrafficPage> createState() => _TrafficPageState();
+}
+
+class _TrafficPageState extends State<_TrafficPage> {
+  int _days = 7;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final p = PaletteScope.of(context);
+    final rows = s.trafficFor(_days);
+    final up = rows.fold(0, (a, r) => a + r.$2);
+    final down = rows.fold(0, (a, r) => a + r.$3);
+    final peak = rows.fold(1, (a, r) => a > r.$2 + r.$3 ? a : r.$2 + r.$3);
+    const months = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        Segment<int>(value: _days, onChanged: (v) => setState(() => _days = v), options: const [(7, 'Неделя'), (30, 'Месяц')]),
+        const SizedBox(height: 12),
+        Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(formatBytes(up + down), style: p.text(28, weight: FontWeight.w700, display: true)),
+              Text('↓ ${formatBytes(down)}   ↑ ${formatBytes(up)}', style: p.text(14, color: p.muted)),
+              const SizedBox(height: 16),
+              Semantics(
+                label: 'Расход по дням',
+                child: SizedBox(
+                  height: 120,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      for (final r in rows)
+                        Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: _days > 7 ? 1 : 4),
+                            child: Container(
+                              height: 4 + 116 * (r.$2 + r.$3) / peak,
+                              decoration: BoxDecoration(
+                                gradient: p.accentGradient,
+                                borderRadius: BorderRadius.circular(_days > 7 ? 2 : 6),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('${rows.first.$1.day} ${months[rows.first.$1.month - 1]}', style: p.text(12, color: p.muted)),
+                  Text('сегодня', style: p.text(12, color: p.muted)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        for (final r in rows.reversed.where((r) => r.$2 + r.$3 > 0))
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Expanded(child: Text('${r.$1.day} ${months[r.$1.month - 1]}', style: p.text(14))),
+                Text('↓ ${formatBytes(r.$3)}   ↑ ${formatBytes(r.$2)}', style: p.text(14, color: p.muted)),
+              ],
+            ),
+          ),
+        if (up + down == 0) Text('За этот период трафика через VPN не было.', style: p.text(14, color: p.muted)),
+        const SizedBox(height: 12),
+        Text('Считается трафик через VPN. История хранится только на этом устройстве, никуда не отправляется.',
+            style: p.text(13, color: p.muted)),
+        const SizedBox(height: 8),
+        if (s.trafficDays.isNotEmpty) PillButton(label: 'Очистить историю', danger: true, onTap: s.clearTraffic),
+      ],
+    );
+  }
+}
+
+class _BackupPage extends StatefulWidget {
+  const _BackupPage({required this.s});
+  final AppState s;
+
+  @override
+  State<_BackupPage> createState() => _BackupPageState();
+}
+
+class _BackupPageState extends State<_BackupPage> {
+  bool _security = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final p = PaletteScope.of(context);
+    final b = s.backupPreview;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        Text(
+          'В файл попадают свои подписки, ручные ключи, избранное, закреплённые узлы и настройки. '
+          'Его можно перенести на другой телефон или компьютер и восстановить там.',
+          style: p.text(14, color: p.muted),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Файл не шифруется: в нём ссылки подписок и ключи узлов. Храните его как пароль.',
+          style: p.text(14, color: p.danger),
+        ),
+        const SizedBox(height: 16),
+        PillButton(label: 'Сохранить копию в файл', primary: true, icon: Icons.save_alt_rounded, onTap: s.saveBackup),
+        const SizedBox(height: 8),
+        PillButton(label: 'Восстановить из файла', icon: Icons.restore_rounded, onTap: s.openBackup),
+        if (b != null) ...[
+          const SizedBox(height: 16),
+          Panel(
+            highlight: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Что в копии', style: p.text(16, weight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                if (b.created != null)
+                  Text(
+                      'Создана ${b.created!.day}.${b.created!.month.toString().padLeft(2, '0')}.${b.created!.year}'
+                      '${b.version != null ? ' в версии ${b.version}' : ''}',
+                      style: p.text(14, color: p.muted)),
+                Text('Подписок по ссылке: ${b.subscriptions}', style: p.text(14)),
+                Text('Наборов ключей: ${b.keySets} (ключей: ${b.keys})', style: p.text(14)),
+                Text('Избранных узлов: ${b.favorites}', style: p.text(14)),
+                Text('Настройки: оформление, подключение, проверка', style: p.text(14)),
+                const SizedBox(height: 4),
+                Text('Свои источники и избранное добавятся к текущим, остальные настройки заменятся.',
+                    style: p.text(13, color: p.muted)),
+                if (b.hasSecurity) ...[
+                  const SizedBox(height: 12),
+                  SettingRow(
+                    title: 'Перенести настройки безопасности',
+                    line: 'Скрытие небезопасных узлов, чёрный список, приложения мимо туннеля, отправка ID устройства. '
+                        'По умолчанию остаются как на этом устройстве.',
+                    control: PillSwitch(on: _security, onChanged: (v) => setState(() => _security = v)),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: PillButton(label: 'Отмена', onTap: s.cancelBackup)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: PillButton(
+                          label: 'Восстановить', primary: true, onTap: () => s.restoreBackup(withSecurity: _security)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ],
       ],
     );
@@ -724,9 +1039,11 @@ class _AboutPage extends StatelessWidget {
                 Text('Доступна версия ${s.update!.versionName}', style: p.text(16, weight: FontWeight.w600)),
                 for (final n in s.update!.notes) Text('• $n', style: p.text(14, color: p.muted)),
                 const SizedBox(height: 12),
-                if (s.updateProgress != null)
-                  LinearProgressIndicator(value: s.updateProgress, color: p.accent, backgroundColor: p.border)
-                else
+                if (s.updateProgress != null) ...[
+                  LinearProgressIndicator(value: s.updateProgress, color: p.accent, backgroundColor: p.border),
+                  const SizedBox(height: 8),
+                  PillButton(label: 'Отменить загрузку', onTap: s.cancelUpdate),
+                ] else
                   PillButton(label: 'Скачать и установить', primary: true, onTap: s.installUpdate),
               ],
             ),

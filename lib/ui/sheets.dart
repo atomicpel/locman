@@ -97,10 +97,25 @@ Future<void> showNodeSheet(BuildContext context, AppState s, ProxyNode node) => 
               padding: const EdgeInsets.only(top: 4),
               child: Text('⚠ ${node.securityIssue}', style: p.text(13, color: p.danger)),
             ),
+          if (s.servicesOn && s.activeServices.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            for (final e in s.activeServices.entries)
+              Text(
+                '${e.value.$1}: ${s.serviceOf(node.id, e.key) == null ? 'не проверялся — проверка идёт после «Проверить все» через 10 самых быстрых узлов' : '${serviceKindText[s.serviceOf(node.id, e.key)!.kind] ?? s.serviceOf(node.id, e.key)!.kind}${s.serviceOf(node.id, e.key)!.detail != null ? ' (${s.serviceOf(node.id, e.key)!.detail})' : ''}'}',
+                style: p.text(13, color: s.serviceOf(node.id, e.key)?.kind == 'ok' ? p.accent : p.muted),
+              ),
+            Text('Проверяется ответ страницы; после входа в аккаунт сервис может работать иначе.',
+                style: p.text(12, color: p.muted)),
+          ],
           const SizedBox(height: 8),
           _sheetButton(p, Icons.speed_rounded, 'Проверить', () {
             Navigator.pop(ctx);
             s.checkNode(node);
+          }),
+          _sheetButton(p, s.isFavorite(node) ? Icons.star_rounded : Icons.star_outline_rounded,
+              s.isFavorite(node) ? 'Убрать из избранного' : 'В избранное', () {
+            Navigator.pop(ctx);
+            s.toggleFavorite(node);
           }),
           _sheetButton(p, Icons.push_pin_outlined, pinned ? 'Открепить' : 'Закрепить', () {
             Navigator.pop(ctx);
