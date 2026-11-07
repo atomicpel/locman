@@ -633,6 +633,7 @@ class AppState extends ChangeNotifier {
     noMux = ((j['noMux'] as List?) ?? const []).map((e) => e.toString()).toSet();
     favorites = ((j['favorites'] as List?) ?? const []).map((e) => e.toString()).toSet();
     servicesOn = j['servicesOn'] == true;
+    servicesAfterConnect = j['servicesAfterConnect'] == true;
     if (j['servicesEnabled'] is List) {
       servicesEnabled = (j['servicesEnabled'] as List).map((e) => e.toString()).toSet();
     }
@@ -705,6 +706,7 @@ class AppState extends ChangeNotifier {
         'noMux': noMux.take(800).toList(),
         'favorites': favorites.toList(),
         'servicesOn': servicesOn,
+        'servicesAfterConnect': servicesAfterConnect,
         'servicesEnabled': servicesEnabled.toList(),
         if (serviceCustom != null) 'serviceCustom': serviceCustom,
         'pinnedId': pinnedId,
@@ -1340,23 +1342,32 @@ class AppState extends ChangeNotifier {
     var duplicates = 0;
     final single = urls.length + (keyLines.isEmpty ? 0 : 1) == 1;
 
+    var fromRepos = 0;
     for (final url in urls) {
-      final id = 'mine-${stableId(url)}';
-      if (mine.any((m) => m.id == id) || added.any((m) => m.id == id)) {
-        duplicates++;
-        continue;
+      // Ссылка на репозиторий GitHub, файл в нём или Telegram-канал — разворачиваем в подписки.
+      final expanded = await _expandUrl(url);
+      if (expanded != null && expanded.length > 1) fromRepos += expanded.length;
+      for (final (title, mirrors, what) in expanded ?? [((Uri.tryParse(url)?.host ?? 'Моя подписка'), [url], 'Подписка по ссылке')]) {
+        final id = 'mine-${stableId(mirrors.first)}';
+        if (mine.any((m) => m.id == id) || added.any((m) => m.id == id)) {
+          duplicates++;
+          continue;
+        }
+        added.add(Source(
+          id: id,
+          title: single && expanded == null && name.trim().isNotEmpty ? name.trim() : title,
+          author: 'Вы',
+          homepage: '',
+          license: 'своё',
+          description: what,
+          mode: 'any',
+          mirrors: mirrors,
+          origin: 'mine',
+        ));
       }
-      added.add(Source(
-        id: id,
-        title: single && name.trim().isNotEmpty ? name.trim() : (Uri.tryParse(url)?.host ?? 'Моя подписка'),
-        author: 'Вы',
-        homepage: '',
-        license: 'своё',
-        description: 'Подписка по ссылке',
-        mode: 'any',
-        mirrors: [url],
-        origin: 'mine',
-      ));
+      if (expanded != null && expanded.isEmpty) {
+        if (urls.length == 1 && keyLines.isEmpty) return 'В репозитории не нашёл файлов с ключами';
+      }
     }
 
     var keys = 0;
@@ -1409,6 +1420,7 @@ class AppState extends ChangeNotifier {
     final subs = added.where((x) => x.hasUrl).toList();
     final parts = [
       if (subs.isNotEmpty) 'подписок: ${subs.length}',
+      if (fromRepos > 0) 'из них найдено в репозиториях: $fromRepos',
       if (keys > 0) 'ключей: $keys',
       if (duplicates > 0) 'уже были: $duplicates',
       if (crypt > 0) 'зашифрованных Happ пропущено: $crypt',
@@ -1418,6 +1430,90 @@ class AppState extends ChangeNotifier {
     flash('Добавлено — ${parts.join(', ')}');
     unawaited(_refreshMany(subs));
     return null;
+  }
+
+  // ---------- Поиск подписок по ссылке на репозиторий или канал ----------
+
+  static final _subName = RegExp(r'(sub|vless|config|white|black|wl|bl|mix|all|rus|reality|v2ray|base64|merged|nodes|bypass|keys)',
+      caseSensitive: false);
+  static final _skipName = RegExp(r'(readme|license|requirements|changelog|robots|\.github/|test|example)', caseSensitive: false);
+  static final _ruHint = RegExp(r'(russia|росси|rus\b|\bru\b|white|бел|wl\b|rkn)', caseSensitive: false);
+
+  /// null — обычная ссылка подписки. Иначе список (название, адреса, описание):
+  /// • github.com/владелец/репозиторий[/tree/ветка/папка] — ищем в нём файлы с ключами
+  ///   (список файлов берём у jsDelivr — он открывается и когда GitHub недоступен);
+  /// • github.com/…/blob/… — прямая ссылка на файл (+ запасной адрес jsDelivr);
+  /// • t.me/канал — публичная лента канала t.me/s/канал: ключи из постов.
+  Future<List<(String, List<String>, String)>?> _expandUrl(String url) async {
+    final u = Uri.tryParse(url);
+    if (u == null) return null;
+    final host = u.host.toLowerCase();
+    final seg = u.pathSegments.where((x) => x.isNotEmpty).toList();
+    if ((host == 't.me' || host == 'telegram.me') && seg.isNotEmpty) {
+      final channel = seg.first == 's' && seg.length > 1 ? seg[1] : seg.first;
+      if (!RegExp(r'^[A-Za-z0-9_]{4,64}$').hasMatch(channel) || channel == 'joinchat') return null;
+      return [('Telegram · @$channel', ['https://t.me/s/$channel'], 'Ключи из публичного Telegram-канала @$channel (последние посты)')];
+    }
+    if (host != 'github.com' && host != 'www.github.com') return null;
+    if (seg.length < 2) return null;
+    final owner = seg[0], repo = seg[1];
+    if (seg.length >= 5 && (seg[2] == 'blob' || seg[2] == 'raw')) {
+      final branch = seg[3];
+      final path = seg.sublist(4).join('/');
+      return [
+        (
+          '$repo · ${seg.last}',
+          ['https://raw.githubusercontent.com/$owner/$repo/$branch/$path', 'https://cdn.jsdelivr.net/gh/$owner/$repo@$branch/$path'],
+          'Файл из github.com/$owner/$repo'
+        )
+      ];
+    }
+    final branches = seg.length >= 4 && seg[2] == 'tree' ? [seg[3]] : const ['main', 'master'];
+    final under = seg.length > 4 && seg[2] == 'tree' ? '/${seg.sublist(4).join('/')}/' : '/';
+    for (final branch in branches) {
+      List<Map> files;
+      try {
+        final r = await Net.getAny(['https://data.jsdelivr.com/v1/packages/gh/$owner/$repo@$branch?structure=flat']);
+        files = ((jsonDecode(r.body) as Map)['files'] as List).whereType<Map>().toList();
+      } catch (_) {
+        continue;
+      }
+      final picks = files.where((f) {
+        final name = f['name']?.toString() ?? '';
+        final size = (f['size'] as num?)?.toInt() ?? 0;
+        final file = name.split('/').last;
+        return name.startsWith(under) &&
+            size > 300 &&
+            size < 8 * 1024 * 1024 &&
+            '/'.allMatches(name).length <= 4 &&
+            _subName.hasMatch(name) &&
+            !_skipName.hasMatch(name) &&
+            (file.endsWith('.txt') || !file.contains('.'));
+      }).toList()
+        ..sort((a, b) {
+          final ra = _ruHint.hasMatch(a['name'].toString()) ? 0 : 1;
+          final rb = _ruHint.hasMatch(b['name'].toString()) ? 0 : 1;
+          return ra != rb ? ra - rb : ((b['size'] as num) - (a['size'] as num)).toInt();
+        });
+      final out = <(String, List<String>, String)>[];
+      for (final f in picks.take(12)) {
+        if (out.length >= 8) break;
+        final path = f['name'].toString().substring(1);
+        final mirrors = [
+          'https://raw.githubusercontent.com/$owner/$repo/$branch/$path',
+          'https://cdn.jsdelivr.net/gh/$owner/$repo@$branch/$path',
+        ];
+        try {
+          final r = await Net.getAny(mirrors, timeout: const Duration(seconds: 15));
+          if (SubscriptionParser.parse(r.body, 'probe').nodes.length < 3) continue;
+        } catch (_) {
+          continue;
+        }
+        out.add(('$repo · ${path.split('/').last}', mirrors, 'Найдено в github.com/$owner/$repo'));
+      }
+      return out;
+    }
+    return const [];
   }
 
   // ---------- Поделиться своими подписками ----------
@@ -2039,6 +2135,65 @@ class AppState extends ChangeNotifier {
       };
 
   void setServicesOn(bool v) => _set(() => servicesOn = v);
+
+  /// Проверять сервисы через узел сразу после подключения.
+  bool servicesAfterConnect = false;
+
+  void setServicesAfterConnect(bool v) => _set(() => servicesAfterConnect = v);
+
+  /// Сервисы для проверки через текущий узел: выбранные, а если ничего не выбрано — все.
+  Map<String, (String, String)> get _hereServices =>
+      activeServices.isNotEmpty ? activeServices : {for (final e in serviceMeta.entries) e.key: e.value};
+
+  /// Проверка сервисов через узел, к которому подключены, — через сам туннель.
+  Future<void> checkServicesHere() async {
+    final id = activeId;
+    final tunnel = Net.tunnel;
+    if (phase != Phase.on || id == null || tunnel == null || serviceStatus != null) return;
+    final gen = ++_serviceGen;
+    final list = _hereServices;
+    services[id]?.removeWhere((k, _) => list.containsKey(k));
+    var i = 0;
+    for (final e in list.entries) {
+      if (gen != _serviceGen || activeId != id || phase != Phase.on) break;
+      serviceStatus = 'Проверяем ${e.value.$1} через этот узел (${++i} из ${list.length})';
+      notifyListeners();
+      final r = await Net.fetchPage(tunnel, e.value.$2);
+      if (gen != _serviceGen) return;
+      (services[id] ??= {})[e.key] = ServiceResult(r.kind, DateTime.now().millisecondsSinceEpoch, r.detail);
+    }
+    if (gen != _serviceGen) return;
+    serviceStatus = null;
+    unawaited(_saveServices());
+    final ok = list.keys.where((k) => serviceOf(id, k)?.kind == 'ok').map((k) => list[k]!.$1).toList();
+    log('Сервисы через ${nodeById(id)?.title ?? 'узел'}: ${ok.isEmpty ? 'ни один не открылся' : 'открываются ${ok.join(', ')}'}');
+    notifyListeners();
+  }
+
+  /// Идёт переключение на другой узел (кнопка «Переключить»).
+  bool switching = false;
+  Timer? _switchTimer;
+
+  /// «Переключить»: на самый быстрый из запасных — как кнопка в уведомлении.
+  /// Если запасные не ответят, «Лоцман» сам найдёт другой узел.
+  Future<void> switchNode() async {
+    if (phase != Phase.on) return connect(ignorePin: true);
+    if (switching) return;
+    _set(() => switching = true);
+    _switchTimer?.cancel();
+    _switchTimer = Timer(const Duration(seconds: 25), () => _set(() => switching = false));
+    stopServiceCheck();
+    stopHunt();
+    _pushBackups();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    log('Переключаем узел по кнопке');
+    await Native.switchNode();
+  }
+
+  void _switchDone() {
+    _switchTimer?.cancel();
+    if (switching) _set(() => switching = false);
+  }
 
   void toggleService(String id) =>
       _set(() => servicesEnabled.contains(id) ? servicesEnabled.remove(id) : servicesEnabled.add(id));
@@ -2844,6 +2999,10 @@ class AppState extends ChangeNotifier {
     _huntBar = 0;
     offer = null;
     if (autoFaster && info?.smoke != true) unawaited(_hunt());
+    if (servicesAfterConnect && info?.smoke != true) {
+      unawaited(Future<void>.delayed(const Duration(seconds: 2), checkServicesHere));
+    }
+    _switchDone();
     final kind = detected == null ? '' : ' · ${detected == NetKind.white ? 'БС' : 'ЧС'}';
     final ms = latencyOf(n.id);
     log('${n.title} · ${n.protocol.title}${ms > 0 ? ' · $ms мс' : ''}$kind');
@@ -3104,6 +3263,7 @@ class AppState extends ChangeNotifier {
 
   /// Сторож в службе сам переключил узел или не нашёл живых запасных.
   void _onWatch(WatchEvent e) {
+    if (e.kind != 'alive') _switchDone();
     switch (e.kind) {
       case 'failover':
         final old = activeId;

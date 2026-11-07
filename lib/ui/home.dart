@@ -133,7 +133,35 @@ class HomeScreen extends StatelessWidget {
         ],
         if (s.phase != Phase.seek) ...[
           const SizedBox(height: 16),
-          PillButton(label: 'Найти рабочий узел', onTap: () => s.connect(ignorePin: true)),
+          if (on)
+            // Подключены: «Переключить» — быстро на лучший из запасных (как в уведомлении),
+            // «Найти заново» — полный поиск с проверкой данными.
+            Row(
+              children: [
+                Expanded(
+                  child: PillButton(
+                    label: s.switching ? 'Переключаем…' : 'Переключить',
+                    primary: true,
+                    icon: Icons.swap_horiz_rounded,
+                    onTap: s.switching ? null : s.switchNode,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: PillButton(
+                    label: 'Найти заново',
+                    icon: Icons.travel_explore_rounded,
+                    onTap: () => s.connect(ignorePin: true),
+                  ),
+                ),
+              ],
+            )
+          else
+            PillButton(label: 'Найти рабочий узел', onTap: () => s.connect(ignorePin: true)),
+        ],
+        if (on) ...[
+          const SizedBox(height: 16),
+          _ServicesCard(s: s),
         ],
         const SizedBox(height: 16),
         Panel(
@@ -475,6 +503,78 @@ class _OfferCard extends StatelessWidget {
           PillButton(label: 'Оставить текущий и искать дальше', onTap: s.keepAndSearch),
         ],
       ),
+    );
+  }
+}
+
+/// Сервисы через узел, к которому подключены: проверка по кнопке (или сама после подключения).
+class _ServicesCard extends StatelessWidget {
+  const _ServicesCard({required this.s});
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = PaletteScope.of(context);
+    final id = s.activeId;
+    final list = s.activeServices.isNotEmpty ? s.activeServices : {for (final e in serviceMeta.entries) e.key: e.value};
+    final busy = s.serviceStatus != null;
+    final any = id != null && list.keys.any((k) => s.serviceOf(id, k) != null);
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('Сервисы через этот узел', style: p.text(16, weight: FontWeight.w600))),
+              if (busy)
+                Pressable(
+                  onTap: s.stopServiceCheck,
+                  label: 'Остановить проверку',
+                  child: Icon(Icons.close_rounded, size: 18, color: p.muted),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final e in list.entries)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 82, child: Text(e.value.$1, style: p.text(14, weight: FontWeight.w500))),
+                  Expanded(child: _status(p, id == null ? null : s.serviceOf(id, e.key))),
+                ],
+              ),
+            ),
+          const SizedBox(height: 10),
+          if (busy)
+            Row(
+              children: [
+                SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5, color: p.muted)),
+                const SizedBox(width: 8),
+                Expanded(child: Text(s.serviceStatus!, style: p.text(13, color: p.muted))),
+              ],
+            )
+          else
+            PillButton(
+              label: any ? 'Проверить ещё раз' : 'Проверить сервисы',
+              icon: Icons.fact_check_outlined,
+              onTap: s.checkServicesHere,
+            ),
+          const SizedBox(height: 6),
+          Text('Открываем страницы через туннель и смотрим ответ. После входа в аккаунт сервис может работать иначе.',
+              style: p.text(12, color: p.muted)),
+        ],
+      ),
+    );
+  }
+
+  Widget _status(Palette p, ServiceResult? r) {
+    if (r == null) return Text('не проверяли', style: p.text(14, color: p.muted));
+    final ok = r.kind == 'ok';
+    return Text(
+      '${ok ? '✓ ' : '✗ '}${serviceKindText[r.kind] ?? r.kind}',
+      style: p.text(14, color: ok ? p.accent : p.danger),
     );
   }
 }

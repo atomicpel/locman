@@ -163,6 +163,13 @@ class _ServicesPageState extends State<_ServicesPage> {
           control: PillSwitch(on: s.servicesOn, onChanged: s.setServicesOn, label: 'Проверять страницы сервисов'),
         ),
         const SizedBox(height: 8),
+        SettingRow(
+          title: 'Проверять сразу после подключения',
+          line: 'Через узел, к которому подключились, открываем страницы выбранных сервисов — результат на главном экране.',
+          control: PillSwitch(
+              on: s.servicesAfterConnect, onChanged: s.setServicesAfterConnect, label: 'Проверять после подключения'),
+        ),
+        const SizedBox(height: 8),
         for (final e in serviceMeta.entries) ...[
           SettingRow(
             title: e.value.$1,

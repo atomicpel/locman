@@ -235,6 +235,9 @@ class Native {
 
   static Future<void> stop() => win ? WinCore.stop() : _core.invokeMethod('stop');
 
+  /// Переключиться на самый быстрый из запасных узлов, не разрывая VPN надолго.
+  static Future<void> switchNode() => win ? WinCore.switchNext() : _core.invokeMethod('switchNode');
+
   /// Обновить запасные узлы сторожа в уже поднятом туннеле.
   static Future<void> setBackups(List<Map<String, String>> backups) => win
       ? WinCore.setBackups(backups)

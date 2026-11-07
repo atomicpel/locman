@@ -189,6 +189,11 @@ class MainActivity : FlutterActivity() {
                 result.success(null)
             }
 
+            "switchNode" -> {
+                startService(Intent(this, LocmanVpnService::class.java).setAction(LocmanVpnService.ACTION_SWITCH))
+                result.success(null)
+            }
+
             "state" -> {
                 val map = VpnBus.state.toMap().toMutableMap()
                 if (VpnBus.state is VpnState.Connected) {

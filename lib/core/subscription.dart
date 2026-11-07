@@ -43,9 +43,41 @@ class ParsedSubscription {
 }
 
 class SubscriptionParser {
+  static bool looksHtml(String text) {
+    final head = text.trimLeft();
+    final low = head.substring(0, head.length < 300 ? head.length : 300).toLowerCase();
+    return head.startsWith('<') && (low.contains('<html') || low.contains('<!doctype') || low.contains('<head'));
+  }
+
+  static final _keyInHtml = RegExp(r'''(?:vless|vmess|trojan|ss|hysteria2|hy2)://[^\s"'<>]+''', caseSensitive: false);
+
+  /// Ключи со страницы: снимаем теги и HTML-сущности, ищем vless://, vmess:// и т. п.
+  static List<String> keysFromHtml(String html) {
+    final text = html
+        .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&#036;', r'$');
+    final out = <String>{};
+    for (final m in _keyInHtml.allMatches(text)) {
+      var k = m.group(0)!;
+      while (k.isNotEmpty && '.,;)]'.contains(k[k.length - 1])) {
+        k = k.substring(0, k.length - 1);
+      }
+      out.add(k);
+    }
+    return out.toList();
+  }
+
   static ParsedSubscription parse(String body, String sourceId, {Map<String, String> headers = const {}}) {
     var text = body.trim();
     if (text.startsWith('﻿')) text = text.substring(1);
+    // Веб-страница (публичный Telegram-канал t.me/s/…, страница с ключами) — достаём ключи из неё.
+    if (looksHtml(text)) text = keysFromHtml(text).join('\n');
     final json = XrayJsonParser.parse(text, sourceId);
     if (json == null && !text.contains('://')) {
       final decoded = decodeBase64(text);

@@ -35,7 +35,7 @@ TIMEOUT = 25
 UA = "Locman-catalog/1"
 SCHEMES = ("vless", "vmess", "trojan", "ss", "hysteria2", "hy2")
 AEAD = {
-    "aes-128-gcm", "aes-192-gcm", "aes-256-gcm", "chacha20-ietf-poly1305",
+    "aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305",
     "chacha20-poly1305", "xchacha20-ietf-poly1305", "xchacha20-poly1305",
 }
 # Хосты, с которых принимаем автоматически найденные подписки: публичная история изменений.
@@ -48,6 +48,28 @@ MIN_FOUND_SECURE = 20
 MIN_FOUND_SHARE = 0.6
 FOUND_RECOMMENDED = 6
 DEAD_AFTER_DAYS = 3
+# Сколько найденных источников держим в каталоге (лучшие по живости и числу безопасных узлов).
+MAX_FOUND = 30
+
+# Поиск по GitHub: репозитории с подписками, обновлённые за последние дни.
+GITHUB_QUERIES = [
+    "vless reality russia",
+    "vpn configs russia",
+    "white list vless",
+    "белые списки vless",
+    "vless russia subscription",
+    "v2ray configs collector",
+    "topic:v2ray-config",
+    "topic:vless",
+]
+GITHUB_FRESH_DAYS = 3
+GITHUB_MAX_REPOS = 40
+GITHUB_FILES_PER_REPO = 4
+# Имена файлов, похожие на подписки.
+SUB_NAME = re.compile(r"(sub|vless|config|white|black|wl|bl|mix|all|rus|reality|v2ray|base64|merged|nodes|bypass|keys)",
+                      re.I)
+SKIP_NAME = re.compile(r"(readme|license|requirements|changelog|robots|\.github/|test|example)", re.I)
+RU_HINT = re.compile(r"(russia|росси|rus\b|\bru\b|white|бел|wl\b|ркн|rkn)", re.I)
 STALE_AFTER_DAYS = 10
 
 
@@ -221,6 +243,84 @@ def check(source: dict, tcp: bool) -> dict:
     return result
 
 
+def gh_api(path: str, token: str) -> dict:
+    req = urllib.request.Request("https://api.github.com/" + path, headers={
+        "User-Agent": UA, "Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}",
+    })
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # noqa: S310
+        return json.loads(resp.read(MAX_BODY))
+
+
+def mode_of(text: str) -> str:
+    t = text.lower()
+    if re.search(r"(white|бел|\bwl\b|_wl|wl_|whitelist|bypass)", t):
+        return "white"
+    if re.search(r"(black|\bbl\b|_bl|bl_|blacklist)", t):
+        return "black"
+    return "any"
+
+
+def search_github(known: set[str]) -> list[dict]:
+    """Второй механизм поиска: GitHub. Ищем репозитории, обновлённые за последние дни, и берём из них
+    файлы, похожие на подписки. Дальше они проходят ту же проверку, что и остальные найденные:
+    достаточно безопасных узлов, живость по TCP, не мёртвые дольше трёх дней."""
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        print("  · поиск по GitHub пропущен: нет GITHUB_TOKEN", file=sys.stderr)
+        return []
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=GITHUB_FRESH_DAYS)).strftime("%Y-%m-%d")
+    repos: dict[str, dict] = {}
+    for q in GITHUB_QUERIES:
+        try:
+            res = gh_api("search/repositories?" + urllib.parse.urlencode(
+                {"q": f"{q} pushed:>{since}", "sort": "updated", "per_page": 30}), token)
+        except Exception as e:  # noqa: BLE001
+            print(f"  ! поиск «{q}»: {e}", file=sys.stderr)
+            continue
+        for item in res.get("items", []):
+            if item.get("fork") or item.get("archived") or item.get("size", 0) > 500_000:
+                continue
+            repos.setdefault(item["full_name"], item)
+    # Сначала те, что явно про Россию и белые списки.
+    ranked = sorted(repos.values(), key=lambda r: (
+        not RU_HINT.search(f"{r['full_name']} {r.get('description') or ''} {' '.join(r.get('topics') or [])}"),
+        -(r.get("stargazers_count") or 0)))[:GITHUB_MAX_REPOS]
+    found: list[dict] = []
+    for repo in ranked:
+        full, branch = repo["full_name"], repo.get("default_branch") or "main"
+        try:
+            tree = gh_api(f"repos/{full}/git/trees/{urllib.parse.quote(branch)}?recursive=1", token)
+        except Exception as e:  # noqa: BLE001
+            print(f"  ! {full}: {e}", file=sys.stderr)
+            continue
+        files = [t for t in tree.get("tree", [])
+                 if t.get("type") == "blob" and 2_000 < (t.get("size") or 0) < MAX_BODY
+                 and t["path"].count("/") <= 3 and SUB_NAME.search(t["path"]) and not SKIP_NAME.search(t["path"])
+                 and (t["path"].endswith(".txt") or "." not in t["path"].rsplit("/", 1)[-1])]
+        files.sort(key=lambda t: (not RU_HINT.search(t["path"]), -(t.get("size") or 0)))
+        owner, name = full.split("/", 1)
+        for t in files[:GITHUB_FILES_PER_REPO]:
+            path = urllib.parse.quote(t["path"])
+            raw = f"https://raw.githubusercontent.com/{full}/{branch}/{path}"
+            if raw in known:
+                continue
+            file = t["path"].rsplit("/", 1)[-1]
+            found.append({
+                "id": "found-" + hashlib.sha1(raw.encode()).hexdigest()[:10],
+                "title": f"{owner} · {file}"[:48],
+                "author": owner,
+                "homepage": f"https://github.com/{full}",
+                "license": (repo.get("license") or {}).get("spdx_id") or "не указана",
+                "description": f"Найден поиском по GitHub: {file}. " + ((repo.get("description") or "")[:120]),
+                "mode": mode_of(f"{full} {t['path']} {repo.get('description') or ''}"),
+                # jsDelivr — запасной адрес, когда GitHub недоступен
+                "mirrors": [raw, f"https://cdn.jsdelivr.net/gh/{full}@{branch}/{path}"],
+                "origin": "found",
+            })
+    print(f"  · GitHub: репозиториев {len(ranked)}, файлов-кандидатов {len(found)}", file=sys.stderr)
+    return found
+
+
 def discover(meta: list[dict], known: set[str]) -> list[dict]:
     found: dict[str, dict] = {}
     for entry in meta:
@@ -274,6 +374,9 @@ def main() -> int:
     kept = [p for p in previous.values() if p.get("origin") == "found"]
     known |= {u for s in kept for u in s["mirrors"]}
     found = [] if args.no_discover else discover(spec.get("discover", []), known)
+    if not args.no_discover:
+        known |= {u for s in found for u in s["mirrors"]}
+        found += search_github(known)
     candidates = curated + [{k: p[k] for k in ("id", "title", "author", "homepage", "license", "description",
                                                "mode", "mirrors", "origin")} for p in kept] + found
 
@@ -316,6 +419,11 @@ def main() -> int:
         return e["id"] in previous
 
     out = [e for e in out if keep(e)]
+    # Найденных не больше MAX_FOUND: лучшие по живости и числу безопасных узлов.
+    found_ok = sorted((e for e in out if e["origin"] == "found"),
+                      key=lambda e: (e["status"] != "ok", -(e["alive"] or 0.5), -min(e["secure"], 400)))
+    drop = {e["id"] for e in found_ok[MAX_FOUND:]}
+    out = [e for e in out if e["id"] not in drop]
     ranked = sorted((e for e in out if e["origin"] == "found" and e["status"] == "ok"),
                     key=lambda e: (-(e["alive"] or 0.5), -min(e["secure"], 400)))
     top = {e["id"] for e in ranked[:FOUND_RECOMMENDED]}

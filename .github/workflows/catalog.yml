@@ -17,11 +17,14 @@ concurrency:
 jobs:
   catalog:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
       - name: Проверка источников
+        env:
+          # Для поиска подписок по GitHub (только чтение публичных репозиториев).
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/catalog.py --tcp | tee catalog-report.txt
 
       - name: Сохранить

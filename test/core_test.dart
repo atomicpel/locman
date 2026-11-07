@@ -487,4 +487,14 @@ void main() {
     expect(jsonEncode(out).contains('allowInsecure'), isFalse);
     expect(jsonEncode(out).contains('a.com'), isTrue);
   });
+
+  test('Ключи со страницы (Telegram-канал, веб-страница)', () {
+    const html = '<!DOCTYPE html><html><head></head><body><div class="tgme_widget_message_text">'
+        'Новый ключ:<br/><code>vless://11111111-2222-3333-4444-555555555555@1.2.3.4:443?security=reality&amp;sni=a.ru&amp;pbk=k&amp;type=tcp#RU</code>'
+        '<br/>и ещё trojan://pw@5.6.7.8:443?security=tls&amp;sni=b.com#T.</div></body></html>';
+    final sub = SubscriptionParser.parse(html, 'tg');
+    expect(sub.nodes.length, 2);
+    expect(sub.nodes.first.params['sni'], 'a.ru');
+    expect(sub.nodes.last.name, 'T');
+  });
 }

@@ -238,6 +238,12 @@ class _AddFormState extends State<_AddForm> {
           style: p.text(13),
           decoration: _decor('Каждая ссылка https://… станет отдельной подпиской, ключи vless://, vmess://, trojan://, ss://, hy2:// соберутся в один источник'),
         ),
+        const SizedBox(height: 4),
+        Text(
+          'Можно и ссылку на репозиторий GitHub — «Лоцман» сам найдёт в нём файлы с ключами, '
+          'или на публичный Telegram-канал (t.me/канал) — ключи соберутся из его постов.',
+          style: p.text(12, color: p.muted),
+        ),
         Wrap(
           children: [
             TextButton.icon(
