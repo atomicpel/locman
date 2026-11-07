@@ -195,7 +195,9 @@ def parse(body: bytes) -> dict:
             secure.append(ep)
     secure_count = len(secure)
     secure = list(dict.fromkeys(secure))
-    return {"nodes": total, "secure": secure_count, "protocols": protocols, "endpoints": secure}
+    # Отпечаток содержимого: одинаковые наборы ключей (в т. ч. base64 и обычный текст) — один источник.
+    khash = hashlib.sha256("\n".join(sorted(seen)).encode()).hexdigest()[:16] if seen else None
+    return {"nodes": total, "secure": secure_count, "protocols": protocols, "endpoints": secure, "khash": khash}
 
 
 def tcp_alive(endpoints: list[tuple[str, int]], sample: int = 40) -> float | None:
@@ -217,7 +219,7 @@ def tcp_alive(endpoints: list[tuple[str, int]], sample: int = 40) -> float | Non
 
 def check(source: dict, tcp: bool) -> dict:
     result = {"status": "dead", "error": None, "nodes": 0, "secure": 0, "protocols": {}, "mirror": None,
-              "hash": None, "alive": None}
+              "hash": None, "alive": None, "khash": None}
     for url in source["mirrors"]:
         try:
             status, body = fetch(url)
@@ -232,7 +234,7 @@ def check(source: dict, tcp: bool) -> dict:
                 "status": "ok" if stats["secure"] >= MIN_SECURE else "empty",
                 "error": None if stats["secure"] >= MIN_SECURE else "почти нет безопасных узлов",
                 "nodes": stats["nodes"], "secure": stats["secure"], "protocols": stats["protocols"],
-                "mirror": url, "hash": hashlib.sha256(body).hexdigest()[:16],
+                "mirror": url, "hash": hashlib.sha256(body).hexdigest()[:16], "khash": stats["khash"],
             })
             if tcp and stats["secure"]:
                 result["alive"] = tcp_alive(stats["endpoints"])
@@ -253,9 +255,9 @@ def gh_api(path: str, token: str) -> dict:
 
 def mode_of(text: str) -> str:
     t = text.lower()
-    if re.search(r"(white|бел|\bwl\b|_wl|wl_|whitelist|bypass)", t):
+    if re.search(r"(white|бел|(?:^|[^a-z])wl(?:[^a-z]|$)|bypass)", t):
         return "white"
-    if re.search(r"(black|\bbl\b|_bl|bl_|blacklist)", t):
+    if re.search(r"(black|(?:^|[^a-z])bl(?:[^a-z]|$))", t):
         return "black"
     return "any"
 
@@ -312,7 +314,7 @@ def search_github(known: set[str]) -> list[dict]:
                 "homepage": f"https://github.com/{full}",
                 "license": (repo.get("license") or {}).get("spdx_id") or "не указана",
                 "description": f"Найден поиском по GitHub: {file}. " + ((repo.get("description") or "")[:120]),
-                "mode": mode_of(f"{full} {t['path']} {repo.get('description') or ''}"),
+                "mode": mode_of(t["path"]) if mode_of(t["path"]) != "any" else mode_of(name),
                 # jsDelivr — запасной адрес, когда GitHub недоступен
                 "mirrors": [raw, f"https://cdn.jsdelivr.net/gh/{full}@{branch}/{path}"],
                 "origin": "found",
@@ -372,6 +374,12 @@ def main() -> int:
     known = {u for s in curated for u in s["mirrors"]}
     # Ранее найденные источники держим, пока живы: так каталог не «мигает» между прогонами.
     kept = [p for p in previous.values() if p.get("origin") == "found"]
+    for p in kept:
+        # Режим найденных поиском по GitHub — только по пути файла и имени репозитория.
+        if p.get("description", "").startswith("Найден поиском по GitHub") and p.get("mirrors"):
+            parts = urllib.parse.urlparse(p["mirrors"][0]).path.strip("/").split("/")
+            path = "/".join(parts[3:])
+            p["mode"] = mode_of(path) if mode_of(path) != "any" else mode_of(parts[1] if len(parts) > 1 else "")
     known |= {u for s in kept for u in s["mirrors"]}
     found = [] if args.no_discover else discover(spec.get("discover", []), known)
     if not args.no_discover:
@@ -384,6 +392,7 @@ def main() -> int:
     out: list[dict] = []
     with cf.ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(lambda s: check(s, args.tcp), candidates))
+    by_id = {source["id"]: res for source, res in zip(candidates, results)}
     for source, res in zip(candidates, results):
         prev = previous.get(source["id"], {})
         changed = prev.get("changedAt") if prev.get("hash") == res["hash"] and res["hash"] else stamp
@@ -419,12 +428,36 @@ def main() -> int:
         return e["id"] in previous
 
     out = [e for e in out if keep(e)]
-    # Найденных не больше MAX_FOUND: лучшие по живости и числу безопасных узлов.
+    # Одинаковое содержимое (копии, base64-варианты, файлы курируемых источников) — оставляем первый,
+    # курируемые идут раньше найденных.
+    seen_k: set[str] = set()
+    deduped = []
+    for e, res in sorted(((e, by_id[e["id"]]) for e in out), key=lambda x: x[0]["origin"] != "curated"):
+        k = res.get("khash")
+        if e["origin"] == "found" and k and k in seen_k:
+            continue
+        if k:
+            seen_k.add(k)
+        deduped.append(e)
+    order = {e["id"]: i for i, e in enumerate(out)}
+    out = sorted(deduped, key=lambda e: order[e["id"]])
+
+    def ru(e: dict) -> bool:
+        return bool(RU_HINT.search(f"{e['homepage']} {e['title']} {e['description']}")) or e["mode"] != "any"
+
+    # Найденных не больше MAX_FOUND и не больше двух файлов из одного репозитория; про Россию — первыми.
     found_ok = sorted((e for e in out if e["origin"] == "found"),
-                      key=lambda e: (e["status"] != "ok", -(e["alive"] or 0.5), -min(e["secure"], 400)))
-    drop = {e["id"] for e in found_ok[MAX_FOUND:]}
-    out = [e for e in out if e["id"] not in drop]
-    ranked = sorted((e for e in out if e["origin"] == "found" and e["status"] == "ok"),
+                      key=lambda e: (e["status"] != "ok", not ru(e), -(e["alive"] or 0.5), -min(e["secure"], 400)))
+    per_repo: dict[str, int] = {}
+    keep_ids = set()
+    for e in found_ok:
+        if len(keep_ids) >= MAX_FOUND or per_repo.get(e["homepage"], 0) >= 2:
+            continue
+        per_repo[e["homepage"]] = per_repo.get(e["homepage"], 0) + 1
+        keep_ids.add(e["id"])
+    out = [e for e in out if e["origin"] != "found" or e["id"] in keep_ids]
+    # Включёнными по умолчанию становятся только найденные источники про Россию.
+    ranked = sorted((e for e in out if e["origin"] == "found" and e["status"] == "ok" and ru(e)),
                     key=lambda e: (-(e["alive"] or 0.5), -min(e["secure"], 400)))
     top = {e["id"] for e in ranked[:FOUND_RECOMMENDED]}
     for e in out:
