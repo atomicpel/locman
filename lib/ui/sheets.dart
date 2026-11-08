@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/catalog.dart';
 import '../core/node.dart';
 import '../engine/native.dart';
 import '../state.dart';
@@ -282,25 +283,124 @@ class _AddFormState extends State<_AddForm> {
 }
 
 /// Поделиться всеми своими подписками и ключами: ссылка, список и QR-код.
-Future<void> showShareSheet(BuildContext context, AppState s) {
-  final lines = s.shareLines();
-  final link = AppState.packShare(lines);
-  final subs = lines.where((l) => l.toLowerCase().startsWith('http')).length;
-  final keys = lines.length - subs;
-  final what = [if (subs > 0) 'подписок: $subs', if (keys > 0) 'ключей: $keys'].join(', ');
-  // В QR влезает около 2900 символов; больше — только ссылкой или списком.
-  final qr = link.length <= 2900 ? Native.qr(link) : Future<Uint8List?>.value(null);
-  return _sheet(context, (ctx, p) {
+Future<void> showShareSheet(BuildContext context, AppState s) =>
+    _sheet(context, (ctx, p) => _ShareFlow(s: s, p: p, close: () => Navigator.pop(ctx)));
+
+/// Поделиться своими: сначала выбираем, какими источниками, потом — QR и кнопки.
+class _ShareFlow extends StatefulWidget {
+  const _ShareFlow({required this.s, required this.p, required this.close});
+  final AppState s;
+  final Palette p;
+  final VoidCallback close;
+
+  @override
+  State<_ShareFlow> createState() => _ShareFlowState();
+}
+
+class _ShareFlowState extends State<_ShareFlow> {
+  late final Set<String> _picked = {for (final m in widget.s.mine) m.id};
+  bool _ready = false;
+  late List<String> _lines;
+  late String _link;
+  late String _what;
+  Future<Uint8List?>? _qr;
+
+  AppState get s => widget.s;
+  Palette get p => widget.p;
+
+  String _sub(Source m) {
+    if (m.links != null) {
+      final n = m.links!.split('\n').where((l) => l.trim().isNotEmpty).length;
+      return 'ключей: $n';
+    }
+    return Uri.tryParse(m.mirrors.isEmpty ? '' : m.mirrors.first)?.host ?? 'подписка';
+  }
+
+  void _next() {
+    _lines = s.shareLines(only: _picked);
+    _link = AppState.packShare(_lines);
+    final subs = _lines.where((l) => l.toLowerCase().startsWith('http')).length;
+    final keys = _lines.length - subs;
+    _what = [if (subs > 0) 'подписок: $subs', if (keys > 0) 'ключей: $keys'].join(', ');
+    // В QR влезает около 2900 символов; больше — только ссылкой или списком.
+    _qr = _link.length <= 2900 ? Native.qr(_link) : Future<Uint8List?>.value(null);
+    setState(() => _ready = true);
+  }
+
+  @override
+  Widget build(BuildContext context) => _ready ? _share() : _pick();
+
+  Widget _pick() {
+    final mine = s.mine;
+    final all = _picked.length == mine.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('Поделиться своими', style: p.text(18, weight: FontWeight.w600, display: true)),
         const SizedBox(height: 2),
-        Text(what.isEmpty ? 'Своих подписок нет' : what[0].toUpperCase() + what.substring(1), style: p.text(14, color: p.muted)),
+        Text(mine.isEmpty ? 'Своих подписок и ключей пока нет' : 'Отметьте, чем поделиться',
+            style: p.text(14, color: p.muted)),
+        if (mine.isNotEmpty) ...[
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => setState(() => all ? _picked.clear() : _picked.addAll(mine.map((m) => m.id))),
+              child: Text(all ? 'Снять все' : 'Выбрать все', style: p.text(13, weight: FontWeight.w600, color: p.accent)),
+            ),
+          ),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final m in mine)
+                  CheckboxListTile(
+                    value: _picked.contains(m.id),
+                    onChanged: (v) => setState(() => v == true ? _picked.add(m.id) : _picked.remove(m.id)),
+                    activeColor: p.accent,
+                    checkColor: p.accentFg,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: Text(m.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: p.text(15)),
+                    subtitle: Text(_sub(m), maxLines: 1, overflow: TextOverflow.ellipsis, style: p.text(12, color: p.muted)),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          PillButton(
+            label: _picked.isEmpty ? 'Ничего не выбрано' : 'Дальше · выбрано ${_picked.length}',
+            primary: true,
+            onTap: _picked.isEmpty ? null : _next,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _share() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Pressable(
+              onTap: () => setState(() => _ready = false),
+              label: 'Изменить выбор',
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Icon(Icons.arrow_back_rounded, size: 20, color: p.fg),
+              ),
+            ),
+            Expanded(child: Text('Поделиться своими', style: p.text(18, weight: FontWeight.w600, display: true))),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(_what.isEmpty ? 'Пусто' : _what[0].toUpperCase() + _what.substring(1), style: p.text(14, color: p.muted)),
         const SizedBox(height: 12),
         Center(
           child: FutureBuilder<Uint8List?>(
-            future: qr,
+            future: _qr,
             builder: (_, snap) {
               if (snap.connectionState != ConnectionState.done) {
                 return SizedBox(width: 220, height: 220, child: Center(child: CircularProgressIndicator(color: p.accent)));
@@ -310,7 +410,7 @@ Future<void> showShareSheet(BuildContext context, AppState s) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Text(
-                    'Подписок слишком много для QR-кода — поделитесь ссылкой или списком.',
+                    'Выбрано слишком много для QR-кода — поделитесь ссылкой или списком, или выберите меньше.',
                     textAlign: TextAlign.center,
                     style: p.text(14, color: p.muted),
                   ),
@@ -334,29 +434,29 @@ Future<void> showShareSheet(BuildContext context, AppState s) {
         _sheetButton(p, Icons.share_rounded, Native.win ? 'Копировать ссылку с пояснением' : 'Поделиться ссылкой', () {
           if (Native.win) s.flash('Скопировано — вставьте в мессенджер');
           Native.share(
-            'Подписки для «Лоцмана» ($what). Откройте ссылку на телефоне с «Лоцманом» '
-            'или вставьте её в «Источники → Добавить»:\n$link',
+            'Подписки для «Лоцмана» ($_what). Откройте ссылку на телефоне с «Лоцманом» '
+            'или вставьте её в «Источники → Добавить»:\n$_link',
             title: 'Поделиться подписками',
           );
         }),
         _sheetButton(p, Icons.list_rounded, Native.win ? 'Копировать списком' : 'Поделиться списком', () {
           if (Native.win) s.flash('Список скопирован');
-          Native.share(lines.join('\n'), title: 'Поделиться подписками');
+          Native.share(_lines.join('\n'), title: 'Поделиться подписками');
         }),
         _sheetButton(p, Icons.copy_rounded, 'Копировать ссылку', () {
-          Clipboard.setData(ClipboardData(text: link));
-          Navigator.pop(ctx);
+          Clipboard.setData(ClipboardData(text: _link));
+          widget.close();
           s.flash('Ссылка скопирована');
         }),
         const SizedBox(height: 8),
         Text(
           'Список подойдёт и для других приложений (Happ, v2rayNG). Кто получит ссылку, сможет пользоваться '
-          'вашими подписками — платные отправляйте только тем, кому доверяете.',
+          'этими подписками — платные отправляйте только тем, кому доверяете.',
           style: p.text(12, color: p.muted),
         ),
       ],
     );
-  });
+  }
 }
 
 String _hm(int ms) {

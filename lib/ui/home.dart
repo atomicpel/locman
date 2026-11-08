@@ -573,7 +573,7 @@ class _ServicesCard extends StatelessWidget {
     if (r == null) return Text('не проверяли', style: p.text(14, color: p.muted));
     final ok = r.kind == 'ok';
     return Text(
-      '${ok ? '✓ ' : '✗ '}${serviceKindText[r.kind] ?? r.kind}',
+      '${ok ? '✓ ' : '✗ '}${r.detail != null && (ok || r.kind == 'region') ? r.detail : serviceKindText[r.kind] ?? r.kind}',
       style: p.text(14, color: ok ? p.accent : p.danger),
     );
   }

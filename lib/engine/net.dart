@@ -336,6 +336,35 @@ class Net {
     }
   }
 
+  /// Служебная страница Cloudflare /cdn-cgi/trace сайта через узел: «loc=XX» — страна выхода.
+  /// null — трассировка не ответила, тогда проверяем саму страницу.
+  static Future<PageCheck?> fetchTrace(LocalProxy p, String url, bool Function(String) allowed, String name) async {
+    final c = _proxied(p, timeout: const Duration(seconds: 10));
+    try {
+      final req = await c.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 12));
+      final resp = await req.close().timeout(const Duration(seconds: 12));
+      final body = await resp.transform(utf8.decoder).join().timeout(const Duration(seconds: 10));
+      if (resp.statusCode != 200) return null;
+      final loc = RegExp(r'^loc=([A-Z]{2})\s*$', multiLine: true).firstMatch(body)?.group(1);
+      if (loc == null) return null;
+      return allowed(loc)
+          ? PageCheck('ok', detail: 'сайт открывается, страна выхода $loc')
+          : PageCheck('region', detail: '$name не работает в стране выхода $loc');
+    } on TimeoutException {
+      return const PageCheck('timeout');
+    } on HandshakeException catch (e) {
+      return PageCheck('tls', detail: e.message);
+    } on TlsException catch (e) {
+      return PageCheck('tls', detail: e.message);
+    } on SocketException catch (e) {
+      return PageCheck('conn', detail: e.message);
+    } catch (_) {
+      return null;
+    } finally {
+      c.close(force: true);
+    }
+  }
+
   /// Открываем страницу сервиса через локальный прокси узла (как браузер), следуем
   /// перенаправлениям сами — адрес назначения тоже говорит о блокировке по региону.
   static Future<PageCheck> fetchPage(LocalProxy p, String url) async {
