@@ -17,7 +17,9 @@ if os.path.exists(notes_file):
 assets = {}
 for apk in apks:
     name = os.path.basename(apk)
-    if "windows" in name:
+    if "win7" in name:
+        abi = "win7-x64"
+    elif "windows" in name:
         abi = "windows-x64"
     else:
         abi = "arm64-v8a" if "arm64" in name else ("armeabi-v7a" if "armeabi" in name else "universal")

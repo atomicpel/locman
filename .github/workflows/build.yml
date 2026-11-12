@@ -297,9 +297,80 @@ jobs:
             sleep 10
           done
 
+  win7:
+    name: Windows 7 (Лоцман Lite)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Версия
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* || "$GITHUB_REF" == refs/heads/release/v* ]]; then
+            TAG="${GITHUB_REF_NAME#release/}"
+            VERSION="${TAG#v}"
+          else
+            VERSION="0.0.${{ github.run_number }}"
+          fi
+          XRAY=$(grep -oE 'XRAY_LIB_VERSION:-v[0-9.]+' tools/fetch_natives.sh | sed 's/.*:-//')
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "XRAY=$XRAY" >> "$GITHUB_ENV"
+          mkdir -p report7
+          { echo "Лоцман Lite для Windows 7 $VERSION, Xray $XRAY (сборка win7)"; dotnet --info | head -20; } | tee report7/versions.txt
+
+      - name: Ядро Xray для Windows 7
+        run: |
+          mkdir -p xray-win7
+          curl -sSfL -o xray-win7/xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY}/Xray-win7-64.zip"
+          tr -d '\r' < tools/xray-win7.sha256 | sha256sum -c
+          (cd xray-win7 && 7z x -y xray.zip xray.exe wintun.dll geoip.dat geosite.dat LICENSE LICENSE-Wintun > /dev/null && rm xray.zip && ls -la)
+
+      - name: Сборка (.NET Framework 4.8)
+        run: |
+          set -o pipefail
+          dotnet build windows7/Locman7.csproj -c Release -p:Version="$VERSION" -o out7 2>&1 | tee report7/build.txt
+          cp xray-win7/xray.exe xray-win7/wintun.dll xray-win7/geoip.dat xray-win7/geosite.dat out7/
+          cp xray-win7/LICENSE out7/LICENSE-Xray.txt
+          cp xray-win7/LICENSE-Wintun out7/LICENSE-Wintun.txt
+          cp LICENSE out7/LICENSE-Locman.txt
+          rm -f out7/*.pdb
+          ls -la out7 | tee report7/files.txt
+          for f in Locman7.exe Locman7.exe.config xray.exe geoip.dat geosite.dat; do
+            [ -f "out7/$f" ] || { echo "::error::В сборке нет $f"; exit 1; }
+          done
+
+      - name: Установщик и архив
+        run: |
+          set -o pipefail
+          mkdir -p dist7
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          if [ ! -f "$ISCC" ]; then choco install innosetup -y --no-progress > /dev/null; fi
+          "$ISCC" //DAppVersion="$VERSION" //DSourceDir="$(cygpath -w "$PWD/out7")" \
+            //DOutDir="$(cygpath -w "$PWD/dist7")" tools/locman7.iss | tail -n 20 | tee report7/installer.txt
+          mkdir -p pkg && cp -r out7 "pkg/Locman Lite"
+          powershell -NoProfile -Command "Compress-Archive -Path 'pkg\\Locman Lite' -DestinationPath 'dist7\\Locman-Lite-$VERSION-win7-x64-portable.zip' -Force"
+          ls -la dist7
+          (cd dist7 && sha256sum * | tee ../report7/sha256.txt)
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: report-win7
+          path: report7
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: locman-win7
+          path: dist7/*
+          retention-days: 14
+
   release:
     name: Релиз
-    needs: [build, windows]
+    needs: [build, windows, win7]
     if: startsWith(github.ref, 'refs/heads/release/v') || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -320,6 +391,7 @@ jobs:
           mkdir -p dist
           cp art/locman-apk/*.apk dist/
           cp art/locman-windows/*setup.exe art/locman-windows/*portable.zip dist/
+          cp art/locman-win7/*setup.exe art/locman-win7/*portable.zip dist/
           (cd dist && sha256sum *.apk *.exe *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt)
           python3 tools/make_update_json.py "$VERSION" "$CODE" "$GITHUB_REPOSITORY" "$TAG" \
             release-notes.txt dist/*.apk dist/*setup.exe > dist/update.json
@@ -331,6 +403,7 @@ jobs:
             echo
             echo "Android (Poco X7 Pro и другие на arm64): Locman-$VERSION-arm64-v8a.apk."
             echo "Windows 10/11: Locman-$VERSION-windows-x64-setup.exe (установщик) или Locman-$VERSION-windows-x64-portable.zip (без установки)."
+            echo "Windows 7 SP1 (64 бит): Locman-Lite-$VERSION-win7-x64-setup.exe или Locman-Lite-$VERSION-win7-x64-portable.zip — облегчённая версия, нужен .NET Framework 4.8."
             echo
             echo "Отпечаток сертификата подписи APK (SHA-256): $CERT"
           } > dist/NOTES.md
