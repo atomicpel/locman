@@ -1,26 +1,25 @@
 {
- "versionCode": 10900,
- "versionName": "1.9.0",
- "published": "2026-11-12",
+ "versionCode": 10901,
+ "versionName": "1.9.1",
+ "published": "2026-11-13",
  "notes": [
-  "Лоцман Lite для Windows 7 SP1 (64 бит): облегчённая версия на .NET Framework 4.8 с официальным ядром Xray для Windows 7. Подписки и каталог, автоматический поиск рабочего узла с проверкой, что идут данные, кнопки «Переключить» и «Найти заново», сторож, системный прокси, значок у часов, автозапуск",
-  "Полная версия для Windows 10/11 и Android — без изменений"
+  "Лоцман Lite для Windows 7: в установщик встроен офлайн-установщик .NET Framework 4.8 от Microsoft вместе с корневым сертификатом Microsoft 2011 — если .NET нет, он ставится сам, без интернета (один запрос прав администратора)"
  ],
  "assets": {
   "arm64-v8a": {
-   "url": "https://github.com/atomicpel/locman/releases/download/v1.9.0/Locman-1.9.0-arm64-v8a.apk",
-   "sha256": "090075d7273f9a5094e52fbc3d88fd45943c5317e3c7dbeaff1c94e01223f252",
-   "size": 28490021
+   "url": "https://github.com/atomicpel/locman/releases/download/v1.9.1/Locman-1.9.1-arm64-v8a.apk",
+   "sha256": "f3dca249e35c950331b646de406406804d1dcf5297772714ee75e15b32c14925",
+   "size": 28490066
   },
   "windows-x64": {
-   "url": "https://github.com/atomicpel/locman/releases/download/v1.9.0/Locman-1.9.0-windows-x64-setup.exe",
-   "sha256": "301ebb1c049af22fb9cc15d316007f6dad5fe6839ec55bac8363349488a3f7ee",
-   "size": 20509557
+   "url": "https://github.com/atomicpel/locman/releases/download/v1.9.1/Locman-1.9.1-windows-x64-setup.exe",
+   "sha256": "50be16cdfd6902b443a3e640b3946563a8bba29c8d64f46d33d76f20621c2f8c",
+   "size": 20507574
   },
   "win7-x64": {
-   "url": "https://github.com/atomicpel/locman/releases/download/v1.9.0/Locman-Lite-1.9.0-win7-x64-setup.exe",
-   "sha256": "51d48d98d1950a733e524fcee9e0c2e72607f759869b62ec07b3b73821e25929",
-   "size": 12890565
+   "url": "https://github.com/atomicpel/locman/releases/download/v1.9.1/Locman-Lite-1.9.1-win7-x64-setup.exe",
+   "sha256": "bb9e78875c3156db218eb9c7fa5d2b95066f61897dd6463e7b417036fcbd5c16",
+   "size": 134112716
   }
  }
 }
