@@ -369,7 +369,8 @@ jobs:
           if [ ! -f "$ISCC" ]; then choco install innosetup -y --no-progress > /dev/null; fi
           "$ISCC" //DAppVersion="$VERSION" //DSourceDir="$(cygpath -w "$PWD/out7")" \
             //DDotNetDir="$(cygpath -w "$PWD/dotnet7")" \
-            //DOutDir="$(cygpath -w "$PWD/dist7")" tools/locman7.iss | tee report7/installer.txt | head -n 3
+            //DOutDir="$(cygpath -w "$PWD/dist7")" tools/locman7.iss > report7/installer.txt
+          head -n 3 report7/installer.txt; tail -n 5 report7/installer.txt
           mkdir -p pkg && cp -r out7 "pkg/Locman Lite"
           powershell -NoProfile -Command "Compress-Archive -Path 'pkg\\Locman Lite' -DestinationPath 'dist7\\Locman-Lite-$VERSION-win7-x64-portable.zip' -Force"
           ls -la dist7
