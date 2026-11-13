@@ -15,7 +15,15 @@ namespace Locman7
         static void Main(string[] args)
         {
             bool first;
-            using (var mutex = new Mutex(true, "Locman7.Single", out first))
+            var restarted = Array.IndexOf(args, "--restarted") >= 0;
+            var mutex = new Mutex(true, "Locman7.Single", out first);
+            // Перезапуск с правами администратора: ждём, пока старая копия закроется.
+            for (var i = 0; !first && restarted && i < 50; i++)
+            {
+                Thread.Sleep(200);
+                try { first = mutex.WaitOne(0); } catch (AbandonedMutexException) { first = true; }
+            }
+            using (mutex)
             {
                 if (!first)
                 {
@@ -29,8 +37,11 @@ namespace Locman7
                 System.Windows.Forms.Application.EnableVisualStyles();
                 System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
                 var settings = Settings.Load();
+                if (settings.Theme == "light") Theme.Light();
                 var hidden = Array.IndexOf(args, "--tray") >= 0 || settings.StartMinimized;
-                System.Windows.Forms.Application.Run(new MainForm(hidden));
+                var form = new MainForm(hidden && !restarted, Array.IndexOf(args, "--connect") >= 0);
+                form._mutexRelease = () => { try { mutex.ReleaseMutex(); } catch { } };
+                System.Windows.Forms.Application.Run(form);
             }
         }
 

@@ -32,6 +32,14 @@ namespace Locman7
     {
         public string Mode = "black"; // black — обычный интернет, white — белые списки, any — все
         public bool DirectRu = true, Autostart, StartMinimized, CloseToTray = true;
+
+        /// <summary>true — весь трафик через TUN (Wintun, нужны права администратора); false — системный прокси.</summary>
+        public bool Tun;
+
+        /// <summary>dark или light.</summary>
+        public string Theme = "dark";
+
+        public bool AutoServices;
         public HashSet<string> Enabled = new HashSet<string>(), Disabled = new HashSet<string>();
         public List<Source> Mine = new List<Source>();
         public string LastNode;
@@ -61,6 +69,9 @@ namespace Locman7
                 s.StartMinimized = Equals(j.ContainsKey("startMinimized") ? j["startMinimized"] : false, true);
                 s.CloseToTray = !Equals(j.ContainsKey("closeToTray") ? j["closeToTray"] : true, false);
                 s.LastNode = Json.Str(j, "lastNode");
+                s.Tun = Equals(j.ContainsKey("tun") ? j["tun"] : false, true);
+                s.AutoServices = Equals(j.ContainsKey("autoServices") ? j["autoServices"] : false, true);
+                s.Theme = Json.Str(j, "theme") == "light" ? "light" : "dark";
                 s.Enabled = Strings(j, "enabled");
                 s.Disabled = Strings(j, "disabled");
                 if (j.TryGetValue("mine", out var mine) && mine is object[] arr)
@@ -86,7 +97,8 @@ namespace Locman7
         {
             var j = new Dictionary<string, object> {
                 { "mode", Mode }, { "directRu", DirectRu }, { "autostart", Autostart }, { "startMinimized", StartMinimized },
-                { "closeToTray", CloseToTray }, { "lastNode", LastNode }, { "enabled", Enabled.ToArray() },
+                { "closeToTray", CloseToTray }, { "lastNode", LastNode }, { "tun", Tun }, { "theme", Theme },
+                { "autoServices", AutoServices }, { "enabled", Enabled.ToArray() },
                 { "disabled", Disabled.ToArray() }, { "mine", Mine.Select(m => m.ToJson()).ToArray() },
             };
             var tmp = FilePath + ".tmp";
@@ -348,13 +360,32 @@ namespace Locman7
     {
         const string Run = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
-        public static void Apply(bool on)
+        /// <summary>Обычный режим — ключ Run. Режим «весь трафик» — задание планировщика
+        /// «с наивысшими правами»: так программа стартует с правами администратора без запроса.</summary>
+        public static void Apply(bool on, bool admin)
         {
             using (var k = Registry.CurrentUser.CreateSubKey(Run))
             {
-                if (on) k.SetValue("Locman7", "\"" + AppInfo.ExecutablePath + "\" --tray");
+                if (on && !admin) k.SetValue("Locman7", "\"" + AppInfo.ExecutablePath + "\" --tray");
                 else k.DeleteValue("Locman7", false);
             }
+            if (on && admin)
+                Schtasks("/Create /F /TN \"Locman7\" /SC ONLOGON /RL HIGHEST /TR \"\\\"" + AppInfo.ExecutablePath + "\\\" --tray\"");
+            else
+                Schtasks("/Delete /F /TN \"Locman7\"");
+        }
+
+        static void Schtasks(string args)
+        {
+            try
+            {
+                var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("schtasks.exe", args)
+                {
+                    UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+                });
+                p?.WaitForExit(10000);
+            }
+            catch { }
         }
     }
 

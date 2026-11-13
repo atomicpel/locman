@@ -120,11 +120,12 @@ namespace Locman7
         }
 
         /// <summary>Подключение: локальные входы SOCKS и HTTP только на 127.0.0.1 (их берёт системный прокси).</summary>
-        public static string Connect(Node n, int socksPort, int httpPort, bool directRu)
+        public static string Connect(Node n, int socksPort, int httpPort, bool directRu, bool tun = false)
         {
-            var rules = new List<object> {
-                D("type", "field", "ip", new object[] { "geoip:private" }, "outboundTag", "direct"),
-            };
+            var rules = new List<object>();
+            // TUN: сам «Лоцман» и ядра проверки узлов ходят напрямую, а не через текущий узел.
+            if (tun) rules.Add(D("type", "field", "process", new object[] { "xray.exe", "Locman7.exe" }, "outboundTag", "direct"));
+            rules.Add(D("type", "field", "ip", new object[] { "geoip:private" }, "outboundTag", "direct"));
             if (directRu)
             {
                 rules.Add(D("type", "field", "domain", new object[] { "domain:ru", "domain:su", "domain:xn--p1ai", "domain:xn--d1acj3b",
@@ -135,11 +136,7 @@ namespace Locman7
             var sniff = D("enabled", true, "destOverride", new object[] { "http", "tls", "quic" }, "routeOnly", true);
             var config = D(
                 "log", D("loglevel", "warning"),
-                "inbounds", new object[] {
-                    D("tag", "socks", "listen", "127.0.0.1", "port", socksPort, "protocol", "socks",
-                        "settings", D("auth", "noauth", "udp", true), "sniffing", sniff),
-                    D("tag", "http", "listen", "127.0.0.1", "port", httpPort, "protocol", "http", "sniffing", sniff),
-                },
+                "inbounds", Inbounds(socksPort, httpPort, sniff, tun),
                 "outbounds", new object[] {
                     Outbound(n, "proxy"),
                     D("tag", "direct", "protocol", "freedom"),
@@ -147,6 +144,27 @@ namespace Locman7
                 },
                 "routing", D("domainStrategy", "AsIs", "rules", rules.ToArray()));
             return Json.Write(config);
+        }
+
+        static object[] Inbounds(int socksPort, int httpPort, Dictionary<string, object> sniff, bool tun)
+        {
+            var list = new List<object> {
+                D("tag", "socks", "listen", "127.0.0.1", "port", socksPort, "protocol", "socks",
+                    "settings", D("auth", "noauth", "udp", true), "sniffing", sniff),
+                D("tag", "http", "listen", "127.0.0.1", "port", httpPort, "protocol", "http", "sniffing", sniff),
+            };
+            if (tun)
+            {
+                // Весь трафик компьютера: адаптер Wintun, маршруты на все публичные IPv4 (локальная сеть — мимо).
+                var routes = Routes.PublicIpv4().Cast<object>().ToList();
+                routes.Add("2000::/3");
+                list.Insert(0, D("tag", "tun", "protocol", "tun", "settings", D(
+                    "name", "Locman", "mtu", 1500,
+                    "gateway", new object[] { "172.19.255.1/30", "fdfe:dcba:9876::1/126" },
+                    "dns", new object[] { "1.1.1.1" },
+                    "autoSystemRoutingTable", routes.ToArray()), "sniffing", sniff));
+            }
+            return list.ToArray();
         }
 
         /// <summary>Пакетная проверка: у каждого узла свой HTTP-вход на 127.0.0.1, все — в одном процессе Xray.</summary>

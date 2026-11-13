@@ -29,6 +29,13 @@ namespace Locman7
         public event Action Changed;
         public event Action<string> Logged;
 
+        /// <summary>Режиму «весь трафик» нужны права администратора — окно спросит и перезапустит.</summary>
+        public event Action NeedAdmin;
+
+        /// <summary>Результаты проверки сервисов через текущий узел: id → (успех, пояснение).</summary>
+        public readonly ConcurrentDictionary<string, Tuple<bool, string>> ServiceResults = new ConcurrentDictionary<string, Tuple<bool, string>>();
+        public bool CheckingServices { get; private set; }
+
         XrayProcess _xray;
         CancellationTokenSource _seek;
         Timer _watch;
@@ -239,9 +246,45 @@ namespace Locman7
             else Disconnect();
         }
 
+        bool AdminOk()
+        {
+            if (!S.Tun || Elevation.IsAdmin) return true;
+            NeedAdmin?.Invoke();
+            return false;
+        }
+
+        /// <summary>Проверить Gemini, ChatGPT, Claude, YouTube через текущее подключение.</summary>
+        public void CheckServices()
+        {
+            if (Phase != Phase.On || CheckingServices) return;
+            CheckingServices = true;
+            ServiceResults.Clear();
+            Changed?.Invoke();
+            Task.Run(() =>
+            {
+                try
+                {
+                    foreach (var s in Services.List)
+                    {
+                        if (Phase != Phase.On) break;
+                        ServiceResults[s[0]] = Services.Check(s[0], s[1], s[2], S.HttpPort);
+                        Changed?.Invoke();
+                    }
+                    Log("Сервисы: " + string.Join(", ", Services.List.Where(s => ServiceResults.TryGetValue(s[0], out var r) && r.Item1).Select(s => s[1])
+                        .DefaultIfEmpty("ни один не открылся")));
+                }
+                finally
+                {
+                    CheckingServices = false;
+                    Changed?.Invoke();
+                }
+            });
+        }
+
         /// <summary>Найти рабочий узел и подключиться. avoid — узел, который пропускаем.</summary>
         public void ConnectAuto(string avoid)
         {
+            if (!AdminOk()) return;
             CancelSeek();
             var cts = new CancellationTokenSource();
             _seek = cts;
@@ -282,6 +325,7 @@ namespace Locman7
         /// <summary>Подключиться к выбранному узлу.</summary>
         public void ConnectTo(Node n)
         {
+            if (!AdminOk()) return;
             CancelSeek();
             var cts = new CancellationTokenSource();
             _seek = cts;
@@ -318,7 +362,7 @@ namespace Locman7
             {
                 StopCore();
                 XrayProcess xray;
-                try { xray = new XrayProcess(XrayConfig.Connect(n, S.SocksPort, S.HttpPort, S.DirectRu), line => { if (line.Contains("[Error]") || line.Contains("failed")) Log("Xray: " + line); }); }
+                try { xray = new XrayProcess(XrayConfig.Connect(n, S.SocksPort, S.HttpPort, S.DirectRu, S.Tun && Elevation.IsAdmin), line => { if (line.Contains("[Error]") || line.Contains("failed")) Log("Xray: " + line); }); }
                 catch (Exception e) { Log("Xray не запустился: " + e.Message); return false; }
                 if (!xray.WaitReady(S.HttpPort, 6000))
                 {
@@ -342,12 +386,17 @@ namespace Locman7
                 Active = n;
                 S.LastNode = n.Id;
                 try { S.Save(); } catch { }
-                try { SysProxy.Set(S.HttpPort); } catch (Exception e) { Log("Системный прокси не включился: " + e.Message); }
+                if (!S.Tun)
+                {
+                    try { SysProxy.Set(S.HttpPort); } catch (Exception e) { Log("Системный прокси не включился: " + e.Message); }
+                }
                 _fails = 0;
                 _watch?.Dispose();
                 _watch = new Timer(_ => Watch(), null, 20000, 20000);
-                Log($"Подключено: {n.Name} ({n.Label})");
+                Log($"Подключено: {n.Name} ({n.Label}){(S.Tun ? ", весь трафик через TUN" : ", системный прокси")}");
+                ServiceResults.Clear();
                 Set(Phase.On, "Подключено");
+                if (S.AutoServices) Task.Delay(1500).ContinueWith(_ => CheckServices());
                 return true;
             }
         }
