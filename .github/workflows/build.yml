@@ -342,6 +342,25 @@ jobs:
             [ -f "out7/$f" ] || { echo "::error::В сборке нет $f"; exit 1; }
           done
 
+      - name: Офлайн-установщик .NET Framework 4.8 и корневой сертификат Microsoft
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dotnet7 | Out-Null
+          # Офлайн-установщик с серверов Microsoft (go.microsoft.com/fwlink/?linkid=2088631)
+          Invoke-WebRequest -UseBasicParsing -Uri 'https://go.microsoft.com/fwlink/?linkid=2088631' -OutFile dotnet7\ndp48-x86-x64-allos-enu.exe
+          $sig = Get-AuthenticodeSignature dotnet7\ndp48-x86-x64-allos-enu.exe
+          if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+            throw "Подпись установщика .NET не прошла проверку: $($sig.Status) $($sig.SignerCertificate.Subject)"
+          }
+          $size = (Get-Item dotnet7\ndp48-x86-x64-allos-enu.exe).Length
+          if ($size -lt 100MB) { throw "Установщик .NET подозрительно мал: $size" }
+          # Microsoft Root Certificate Authority 2011 — из хранилища сертификатов сборочной машины
+          $root = Get-ChildItem Cert:\LocalMachine\Root | Where-Object Thumbprint -eq '8F43288AD272F3103B6FB1428485EA3014C0BCFE'
+          if (-not $root) { throw 'Нет корневого сертификата Microsoft 2011' }
+          Export-Certificate -Cert $root -FilePath dotnet7\MicrosoftRootCertificateAuthority2011.cer -Type CERT | Out-Null
+          "ndp48: $size байт, подпись: $($sig.SignerCertificate.Subject)" | Tee-Object -Append report7\versions.txt
+          (Get-FileHash dotnet7\ndp48-x86-x64-allos-enu.exe).Hash | Tee-Object -Append report7\versions.txt
+
       - name: Установщик и архив
         run: |
           set -o pipefail
@@ -349,7 +368,8 @@ jobs:
           ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
           if [ ! -f "$ISCC" ]; then choco install innosetup -y --no-progress > /dev/null; fi
           "$ISCC" //DAppVersion="$VERSION" //DSourceDir="$(cygpath -w "$PWD/out7")" \
-            //DOutDir="$(cygpath -w "$PWD/dist7")" tools/locman7.iss | tail -n 20 | tee report7/installer.txt
+            //DDotNetDir="$(cygpath -w "$PWD/dotnet7")" \
+            //DOutDir="$(cygpath -w "$PWD/dist7")" tools/locman7.iss | tee report7/installer.txt | head -n 3
           mkdir -p pkg && cp -r out7 "pkg/Locman Lite"
           powershell -NoProfile -Command "Compress-Archive -Path 'pkg\\Locman Lite' -DestinationPath 'dist7\\Locman-Lite-$VERSION-win7-x64-portable.zip' -Force"
           ls -la dist7

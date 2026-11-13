@@ -5,6 +5,9 @@
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
+#ifndef DotNetDir
+  #define DotNetDir "dotnet"
+#endif
 
 [Setup]
 AppId={{A7C3F1D2-4B5E-4F6A-9C1D-7E2B3A4C5D60}
@@ -43,7 +46,7 @@ Name: "{group}\Лоцман Lite"; Filename: "{app}\Locman7.exe"
 Name: "{userdesktop}\Лоцман Lite"; Filename: "{app}\Locman7.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\Locman7.exe"; Description: "Запустить «Лоцман Lite»"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Locman7.exe"; Description: "Запустить «Лоцман Lite»"; Flags: nowait postinstall skipifsilent; Check: NotRestarting
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/C taskkill /IM xray.exe /F"; Flags: runhidden; RunOnceId: "KillXray"
@@ -51,7 +54,17 @@ Filename: "{cmd}"; Parameters: "/C taskkill /IM xray.exe /F"; Flags: runhidden; 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "Locman7"; Flags: uninsdeletevalue dontcreatekey
 
+[Files]
+; Офлайн-установщик .NET Framework 4.8 от Microsoft и корневой сертификат Microsoft 2011
+; (без него на Windows 7 без обновлений установка .NET падает с ошибкой цепочки сертификатов).
+; Распаковываются во временную папку, только если .NET 4.8 нет.
+Source: "{#DotNetDir}\ndp48-x86-x64-allos-enu.exe"; Flags: dontcopy
+Source: "{#DotNetDir}\MicrosoftRootCertificateAuthority2011.cer"; Flags: dontcopy
+
 [Code]
+var
+  RestartNeeded: Boolean;
+
 function DotNet48: Boolean;
 var
   Release: Cardinal;
@@ -61,16 +74,48 @@ begin
 end;
 
 function InitializeSetup: Boolean;
-var
-  Code: Integer;
 begin
   Result := True;
   if not DotNet48 then
+    Result := MsgBox('Для «Лоцман Lite» нужен .NET Framework 4.8 — его нет на этом компьютере.' + #13#10#13#10 +
+      'Он есть внутри этого установщика и поставится сейчас, интернет не нужен. Windows попросит права ' +
+      'администратора, установка займёт 5–10 минут, после неё может понадобиться перезагрузка.' + #13#10#13#10 +
+      'Продолжить?', mbConfirmation, MB_YESNO) = IDYES;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Code: Integer;
+  Cmd: String;
+begin
+  Result := '';
+  if DotNet48 then Exit;
+  WizardForm.PreparingLabel.Caption := 'Устанавливаю .NET Framework 4.8 — это может занять несколько минут…';
+  WizardForm.PreparingLabel.Visible := True;
+  ExtractTemporaryFile('ndp48-x86-x64-allos-enu.exe');
+  ExtractTemporaryFile('MicrosoftRootCertificateAuthority2011.cer');
+  // Один запрос прав: сначала сертификат в доверенные корневые, потом сам .NET (с окном прогресса).
+  Cmd := '/C certutil -addstore Root "' + ExpandConstant('{tmp}\MicrosoftRootCertificateAuthority2011.cer') + '" & "' +
+    ExpandConstant('{tmp}\ndp48-x86-x64-allos-enu.exe') + '" /passive /norestart';
+  if not ShellExec('runas', ExpandConstant('{cmd}'), Cmd, ExpandConstant('{tmp}'), SW_HIDE, ewWaitUntilTerminated, Code) then
   begin
-    if MsgBox('Для «Лоцман Lite» нужен .NET Framework 4.8 — его нет на этом компьютере.' + #13#10#13#10 +
-      'Открыть страницу загрузки Microsoft? Установите «.NET Framework 4.8 Runtime», перезагрузите компьютер и запустите установку «Лоцмана» снова.',
-      mbConfirmation, MB_YESNO) = IDYES then
-      ShellExec('open', 'https://dotnet.microsoft.com/download/dotnet-framework/net48', '', '', SW_SHOWNORMAL, ewNoWait, Code);
-    Result := False;
+    Result := 'Не удалось запустить установку .NET Framework 4.8 (нет прав администратора?).';
+    Exit;
   end;
+  if (Code = 3010) or (Code = 1641) then
+    RestartNeeded := True
+  else if (Code <> 0) and not DotNet48 then
+    Result := 'Установка .NET Framework 4.8 завершилась с кодом ' + IntToStr(Code) + '.' + #13#10 +
+      'Установите обновления Windows 7 SP1 и попробуйте снова.';
+  NeedsRestart := RestartNeeded;
+end;
+
+function NeedRestart: Boolean;
+begin
+  Result := RestartNeeded;
+end;
+
+function NotRestarting: Boolean;
+begin
+  Result := not RestartNeeded;
 end;
