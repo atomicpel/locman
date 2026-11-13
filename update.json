@@ -1,25 +1,28 @@
 {
- "versionCode": 10901,
- "versionName": "1.9.1",
+ "versionCode": 10902,
+ "versionName": "1.9.2",
  "published": "2026-11-13",
  "notes": [
-  "Лоцман Lite для Windows 7: в установщик встроен офлайн-установщик .NET Framework 4.8 от Microsoft вместе с корневым сертификатом Microsoft 2011 — если .NET нет, он ставится сам, без интернета (один запрос прав администратора)"
+  "Лоцман Lite для Windows 7: режим «Весь трафик (TUN)» — через VPN идут все программы компьютера (виртуальный адаптер Wintun, нужны права администратора; автозапуск в этом режиме — через планировщик с наивысшими правами)",
+  "Лоцман Lite: проверка Gemini, ChatGPT, Claude и YouTube через текущий узел — на главном экране, можно включить сразу после подключения",
+  "Лоцман Lite: резервная копия в файл и восстановление — совместима с «Лоцманом» на телефоне, подписки и ключи переносятся в обе стороны. Ссылки «Поделиться своими» с телефона (locman://import…) тоже принимаются",
+  "Лоцман Lite: обновление внутри программы с проверкой контрольной суммы и светлая тема"
  ],
  "assets": {
   "arm64-v8a": {
-   "url": "https://github.com/atomicpel/locman/releases/download/v1.9.1/Locman-1.9.1-arm64-v8a.apk",
-   "sha256": "f3dca249e35c950331b646de406406804d1dcf5297772714ee75e15b32c14925",
-   "size": 28490066
+   "url": "https://github.com/atomicpel/locman/releases/download/v1.9.2/Locman-1.9.2-arm64-v8a.apk",
+   "sha256": "85af356dd183205eb08f65d06cb3364a791ab75d59720453b55653709012fd9c",
+   "size": 28490272
   },
   "windows-x64": {
-   "url": "https://github.com/atomicpel/locman/releases/download/v1.9.1/Locman-1.9.1-windows-x64-setup.exe",
-   "sha256": "50be16cdfd6902b443a3e640b3946563a8bba29c8d64f46d33d76f20621c2f8c",
-   "size": 20507574
+   "url": "https://github.com/atomicpel/locman/releases/download/v1.9.2/Locman-1.9.2-windows-x64-setup.exe",
+   "sha256": "f5b618bbc53eef7b07bf975d0e0389c0e885b68127218297088cec4fe4f67244",
+   "size": 20512056
   },
   "win7-x64": {
-   "url": "https://github.com/atomicpel/locman/releases/download/v1.9.1/Locman-Lite-1.9.1-win7-x64-setup.exe",
-   "sha256": "bb9e78875c3156db218eb9c7fa5d2b95066f61897dd6463e7b417036fcbd5c16",
-   "size": 134112716
+   "url": "https://github.com/atomicpel/locman/releases/download/v1.9.2/Locman-Lite-1.9.2-win7-x64-setup.exe",
+   "sha256": "bc78f28dd84432e62d90bdbe04c1b58bc409e4727a713c2e0d7d04e481e746d4",
+   "size": 134123322
   }
  }
 }
