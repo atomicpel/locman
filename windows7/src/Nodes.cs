@@ -46,6 +46,23 @@ namespace Locman7
         /// <summary>Один и тот же сервер в разных подписках — один узел.</summary>
         public string EndpointKey => $"{Protocol}|{Address.ToLowerInvariant()}:{Port}|{Secret}";
 
+        /// <summary>Имя, которое видит фильтр в рукопожатии (SNI).</summary>
+        public string SniKey => (Nb("sni") ?? Nb("peer") ?? Nb("host") ?? Address).ToLowerInvariant();
+
+        /// <summary>Подсеть сервера: /24 для IPv4, иначе сам адрес.</summary>
+        public string Subnet
+        {
+            get
+            {
+                var a = Address.ToLowerInvariant();
+                return Regex.IsMatch(a, @"^\d+\.\d+\.\d+\.\d+$") ? a.Substring(0, a.LastIndexOf('.')) : a;
+            }
+        }
+
+        /// <summary>Узлы с одинаковым ключом нельзя проверять одновременно: фильтр замораживает
+        /// узел, к которому почти разом открывается много TLS-соединений с одним SNI.</summary>
+        public string GentleKey => SniKey + "@" + Subnet;
+
         public string Label
         {
             get

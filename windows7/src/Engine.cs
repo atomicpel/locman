@@ -29,6 +29,9 @@ namespace Locman7
         public event Action Changed;
         public event Action<string> Logged;
 
+        /// <summary>Обновилась скорость (раз в 2 секунды) — без перерисовки списков.</summary>
+        public event Action Rates;
+
         /// <summary>Режиму «весь трафик» нужны права администратора — окно спросит и перезапустит.</summary>
         public event Action NeedAdmin;
 
@@ -205,6 +208,33 @@ namespace Locman7
             finally { xray?.Dispose(); }
         }
 
+        /// <summary>Пачки для проверки: в одной пачке — не больше одного узла с тем же SNI и подсетью
+        /// и не больше двух из одной подсети. Порядок (по задержке) сохраняется, насколько возможно.</summary>
+        public static List<List<Node>> GentleBatches(IList<Node> nodes, int size)
+        {
+            var batches = new List<List<Node>>();
+            var keys = new List<HashSet<string>>();
+            var nets = new List<Dictionary<string, int>>();
+            foreach (var n in nodes)
+            {
+                var placed = false;
+                for (var i = 0; i < batches.Count && !placed; i++)
+                {
+                    nets[i].TryGetValue(n.Subnet, out var c);
+                    if (batches[i].Count >= size || keys[i].Contains(n.GentleKey) || c >= 2) continue;
+                    batches[i].Add(n);
+                    keys[i].Add(n.GentleKey);
+                    nets[i][n.Subnet] = c + 1;
+                    placed = true;
+                }
+                if (placed) continue;
+                batches.Add(new List<Node> { n });
+                keys.Add(new HashSet<string> { n.GentleKey });
+                nets.Add(new Dictionary<string, int> { { n.Subnet, 1 } });
+            }
+            return batches;
+        }
+
         /// <summary>Сначала TCP до всех (быстро), потом настоящий запрос через 40 лучших.</summary>
         public List<Node> Rank(List<Node> pool, CancellationToken ct, Action<string> progress, int realCount = 40)
         {
@@ -222,8 +252,12 @@ namespace Locman7
             var reachable = pool.Where(n => n.Protocol == Proto.Hysteria2 || (tcp.TryGetValue(n, out var d) && d > 0))
                 .OrderBy(n => n.Protocol == Proto.Hysteria2 ? 900 : tcp[n]).Take(realCount).ToList();
             progress?.Invoke($"Отвечают {reachable.Count}, проверяю их настоящим запросом…");
-            for (var i = 0; i < reachable.Count && !ct.IsCancellationRequested; i += 20)
-                TestBatch(reachable.Skip(i).Take(20).ToList(), ct);
+            foreach (var batch in GentleBatches(reachable, 20))
+            {
+                if (ct.IsCancellationRequested) break;
+                TestBatch(batch, ct);
+                Thread.Sleep(500); // пауза, чтобы рукопожатия к одним и тем же серверам не шли пачкой
+            }
             return reachable.Where(n => Latency.TryGetValue(n.Id, out var l) && l > 0)
                 .OrderBy(n => Latency[n.Id]).ToList();
         }
@@ -362,7 +396,8 @@ namespace Locman7
             {
                 StopCore();
                 XrayProcess xray;
-                try { xray = new XrayProcess(XrayConfig.Connect(n, S.SocksPort, S.HttpPort, S.DirectRu, S.Tun && Elevation.IsAdmin), line => { if (line.Contains("[Error]") || line.Contains("failed")) Log("Xray: " + line); }); }
+                _metricsPort = Net.FreePort();
+                try { xray = new XrayProcess(XrayConfig.Connect(n, S.SocksPort, S.HttpPort, S.DirectRu, S.Tun && Elevation.IsAdmin, _metricsPort), line => { if (line.Contains("[Error]") || line.Contains("failed")) Log("Xray: " + line); }); }
                 catch (Exception e) { Log("Xray не запустился: " + e.Message); return false; }
                 if (!xray.WaitReady(S.HttpPort, 6000))
                 {
@@ -393,6 +428,9 @@ namespace Locman7
                 _fails = 0;
                 _watch?.Dispose();
                 _watch = new Timer(_ => Watch(), null, 20000, 20000);
+                ResetFlow();
+                _flow?.Dispose();
+                _flow = new Timer(_ => Flow(), null, 2000, 2000);
                 Log($"Подключено: {n.Name} ({n.Label}){(S.Tun ? ", весь трафик через TUN" : ", системный прокси")}");
                 ServiceResults.Clear();
                 Set(Phase.On, "Подключено");
@@ -412,6 +450,63 @@ namespace Locman7
             if (++_fails < 2) return;
             Log("Узел перестал отвечать — переключаюсь");
             Reconnect();
+        }
+
+        // ---- Скорость и заморозка: запросы уходят, а в ответ ничего ----
+        int _metricsPort;
+        Timer _flow;
+        readonly long[] _flowUp = new long[12], _flowDown = new long[12];
+        int _flowAt;
+        long _lastUp = -1, _lastDown = -1;
+        DateTime _flowSince, _lastFreezeCheck;
+        int _freezing;
+
+        /// <summary>Скорость за последние 2 секунды, байт/с.</summary>
+        public long RateUp { get; private set; }
+        public long RateDown { get; private set; }
+
+        void ResetFlow()
+        {
+            Array.Clear(_flowUp, 0, _flowUp.Length);
+            Array.Clear(_flowDown, 0, _flowDown.Length);
+            _lastUp = _lastDown = -1;
+            _flowSince = DateTime.Now;
+            RateUp = RateDown = 0;
+        }
+
+        void Flow()
+        {
+            if (Phase != Phase.On || _metricsPort == 0) return;
+            long up, down;
+            if (!Net.ProxyTraffic(_metricsPort, out up, out down)) return;
+            var du = _lastUp < 0 ? 0 : Math.Max(0, up - _lastUp);
+            var dd = _lastDown < 0 ? 0 : Math.Max(0, down - _lastDown);
+            _lastUp = up;
+            _lastDown = down;
+            _flowUp[_flowAt] = du;
+            _flowDown[_flowAt] = dd;
+            _flowAt = (_flowAt + 1) % _flowUp.Length;
+            RateUp = du / 2;
+            RateDown = dd / 2;
+            Rates?.Invoke();
+            if ((DateTime.Now - _flowSince).TotalSeconds < 20 || (DateTime.Now - _lastFreezeCheck).TotalSeconds < 60) return;
+            if (_flowUp.Sum() < 1500 || _flowDown.Sum() > 1024) return;
+            if (Interlocked.Exchange(ref _freezing, 1) == 1) return;
+            _lastFreezeCheck = DateTime.Now;
+            Task.Run(() =>
+            {
+                try
+                {
+                    // Похоже на заморозку — проверяем настоящей загрузкой (64 КБ), дважды.
+                    for (var i = 0; i < 2; i++)
+                        if (Net.ProbeVia(S.HttpPort, "https://speed.cloudflare.com/__down?bytes=65536", 12000, 48 * 1024) > 0
+                            || Net.ProbeVia(S.HttpPort, "https://proof.ovh.net/files/1Mb.dat", 12000, 48 * 1024) > 0) return;
+                    if (Phase != Phase.On) return;
+                    Log("Запросы уходят, а данные не приходят (похоже на заморозку) — переключаюсь");
+                    Reconnect();
+                }
+                finally { Interlocked.Exchange(ref _freezing, 0); }
+            });
         }
 
         void Reconnect()
@@ -439,6 +534,9 @@ namespace Locman7
         {
             _watch?.Dispose();
             _watch = null;
+            _flow?.Dispose();
+            _flow = null;
+            RateUp = RateDown = 0;
             _xray?.Dispose();
             _xray = null;
             Active = null;

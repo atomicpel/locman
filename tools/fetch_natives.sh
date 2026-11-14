@@ -5,10 +5,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ABIS="${ABIS:-arm64-v8a}"
-XRAY_LIB_VERSION="${XRAY_LIB_VERSION:-v26.10.31}"
+XRAY_LIB_VERSION="${XRAY_LIB_VERSION:-v26.11.9}"
 # Коммит тега hev-socks5-tunnel — сборка идёт только из него.
-HEV_COMMIT="d9dca26c7ad0e494492244f0309e80ee583e739e"
-HEV_VERSION="${HEV_VERSION:-2.18.0}"
+HEV_COMMIT="75dbc1e9ace6c70d3d1b94df7c283efe1de7effc"
+HEV_VERSION="${HEV_VERSION:-2.20.0}"
 
 echo "Ядро Xray ($XRAY_LIB_VERSION)"
 mkdir -p "$ROOT/android/app/libs"

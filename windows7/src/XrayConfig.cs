@@ -120,7 +120,7 @@ namespace Locman7
         }
 
         /// <summary>Подключение: локальные входы SOCKS и HTTP только на 127.0.0.1 (их берёт системный прокси).</summary>
-        public static string Connect(Node n, int socksPort, int httpPort, bool directRu, bool tun = false)
+        public static string Connect(Node n, int socksPort, int httpPort, bool directRu, bool tun = false, int metricsPort = 0)
         {
             var rules = new List<object>();
             // TUN: сам «Лоцман» и ядра проверки узлов ходят напрямую, а не через текущий узел.
@@ -143,6 +143,13 @@ namespace Locman7
                     D("tag", "block", "protocol", "blackhole"),
                 },
                 "routing", D("domainStrategy", "AsIs", "rules", rules.ToArray()));
+            if (metricsPort > 0)
+            {
+                // Счётчики трафика (/debug/vars на 127.0.0.1): скорость на экране и сторож заморозки.
+                config["stats"] = new Dictionary<string, object>();
+                config["policy"] = D("system", D("statsOutboundUplink", true, "statsOutboundDownlink", true));
+                config["metrics"] = D("listen", "127.0.0.1:" + metricsPort);
+            }
             return Json.Write(config);
         }
 

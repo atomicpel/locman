@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
@@ -148,6 +149,28 @@ namespace Locman7
             var port = ((IPEndPoint)l.LocalEndpoint).Port;
             l.Stop();
             return port;
+        }
+
+        /// <summary>Счётчики трафика через узел (выход proxy) из /debug/vars ядра.</summary>
+        public static bool ProxyTraffic(int metricsPort, out long up, out long down)
+        {
+            up = down = 0;
+            try
+            {
+                var req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + metricsPort + "/debug/vars");
+                req.Proxy = null;
+                req.Timeout = 1500;
+                string body;
+                using (var resp = req.GetResponse())
+                using (var r = new StreamReader(resp.GetResponseStream(), Encoding.UTF8)) body = r.ReadToEnd();
+                var m = Regex.Match(body, "\"proxy\"\\s*:\\s*\\{[^}]*\"downlink\"\\s*:\\s*(\\d+)[^}]*\\}");
+                var u = Regex.Match(body, "\"proxy\"\\s*:\\s*\\{[^}]*\"uplink\"\\s*:\\s*(\\d+)[^}]*\\}");
+                if (!m.Success || !u.Success) return false;
+                down = long.Parse(m.Groups[1].Value);
+                up = long.Parse(u.Groups[1].Value);
+                return true;
+            }
+            catch { return false; }
         }
 
         /// <summary>TCP-рукопожатие с сервером, мс; -1 — нет ответа.</summary>

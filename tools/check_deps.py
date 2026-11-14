@@ -19,6 +19,12 @@ import sys
 import urllib.request
 
 DRY = "--dry-run" in sys.argv
+# --auto: кроме задачи, сообщить шагу обновления (через GITHUB_OUTPUT), что обновлять и под каким номером.
+AUTO = "--auto" in sys.argv
+bump = []      # аргументы для tools/bump_core.py
+platforms = set()
+notes = {}     # платформа → строки «что нового»
+issues = []    # номера задач, к которым относится автообновление
 REPO = os.environ.get("GITHUB_REPOSITORY", "atomicpel/locman")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
 LABEL = "обновление-ядра"
@@ -100,6 +106,13 @@ if key(core_v) > key(xray_now):
         "</details>",
     ]
     found.append((f"Вышло ядро Xray-core {core_v} (сейчас {xray_now})", "\n".join(lines), aar_line))
+    if android_ready:
+        # Обновляем, только когда ядро вышло сразу для всех платформ (версия одна на всех).
+        bump += ["--xray", core_v]
+        line = f"Ядро Xray обновлено до {core_v} — автоматически, сразу после выхода. Что нового в ядре: {core['html_url']}"
+        for p in ("android", "windows", "win7"):
+            platforms.add(p)
+            notes.setdefault(p, []).append(line)
 
 # --- TUN-мост для Android ---
 hev = api("repos/heiher/hev-socks5-tunnel/releases/latest")
@@ -121,6 +134,37 @@ if key(hev_v) > key(hev_now):
         ]),
         None,
     ))
+    bump += ["--hev", hev_v]
+    platforms.add("android")
+    notes.setdefault("android", []).append(f"TUN-мост hev-socks5-tunnel обновлён до {hev_v} — автоматически. Что нового: {hev['html_url']}")
+
+def emit():
+    """Передать шагу автообновления: что обновлять, какие платформы выпускать и под каким номером."""
+    out = os.environ.get("GITHUB_OUTPUT")
+    if not (AUTO and out and bump):
+        return
+    for p, lines in notes.items():
+        pathlib.Path(f"release-notes/{p}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Номер — следующий за последним выпущенным у любой платформы (счёт общий).
+    top = 0
+    for name in ("update.json", "update-windows.json", "update-win7.json"):
+        try:
+            req = urllib.request.Request(f"https://raw.githubusercontent.com/{REPO}/updates/{name}?t={os.getpid()}",
+                                         headers={"User-Agent": "locman-deps", "Cache-Control": "no-cache"})
+            with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+                top = max(top, json.load(resp)["versionCode"])
+        except Exception:  # noqa: BLE001
+            pass
+    ma, mi, pa = top // 10000, top // 100 % 100, top % 100 + 1
+    if pa > 99:
+        mi, pa = mi + 1, 0
+    with open(out, "a", encoding="utf-8") as f:
+        f.write(f"bump={' '.join(bump)}\n")
+        f.write(f"platforms={' '.join(sorted(platforms))}\n")
+        f.write(f"version={ma}.{mi}.{pa}\n")
+        f.write(f"issues={' '.join(str(i) for i in sorted(set(issues)))}\n")
+    print(f"Автообновление: {' '.join(bump)} → {ma}.{mi}.{pa} для {', '.join(sorted(platforms))}")
+
 
 if not found:
     print("Всё актуально")
@@ -138,7 +182,10 @@ for title, body, aar_line in found:
         if DRY:
             print(body)
             continue
-        api(f"repos/{REPO}/issues", {"title": title, "body": body, "labels": [LABEL], "assignees": [owner]})
+        issue = api(f"repos/{REPO}/issues", {"title": title, "body": body, "labels": [LABEL], "assignees": [owner]})
+        issues.append(issue["number"])
+    if old is None:
+        pass
     elif aar_line and "AndroidLibXrayLite) ещё на" in (old.get("body") or "") and old["state"] == "open":
         # Задача заведена раньше, чем вышла сборка для Android, — дописываем один раз.
         marker = "Сборка ядра для Android вышла"
@@ -150,3 +197,12 @@ for title, body, aar_line in found:
                     {"body": f"{marker} — теперь можно обновлять и Android.\n\nКонтрольная сумма (SHA-256):\n{aar_line}"})
     else:
         print(f"Уже есть: {title}")
+    if old is not None and old["state"] == "open":
+        issues.append(old["number"])
+        # Автообновление этой версии уже не прошло сборку — не повторяем каждый день, ждём ручной правки.
+        if AUTO and not DRY:
+            comments = api(f"repos/{REPO}/issues/{old['number']}/comments?per_page=100")
+            if any("Автообновление не прошло" in (c.get("body") or "") for c in comments):
+                print(f"Автообновление для «{title}» уже не прошло — пропускаю")
+                bump.clear()
+emit()

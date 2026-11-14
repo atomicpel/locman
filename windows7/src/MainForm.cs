@@ -339,6 +339,7 @@ namespace Locman7
             _tray.DoubleClick += (s, e) => ShowWindow();
 
             _e.Changed += () => Ui(Sync);
+            _e.Rates += () => Ui(SyncNode);
             _e.NeedAdmin += () => Ui(() => AskAdmin(true));
             _e.Logged += line => Ui(() =>
             {
@@ -440,9 +441,7 @@ namespace Locman7
             _power.Sync(on, busy);
             _status.Text = on ? "Подключено" : busy ? "Поиск…" : "Выключено";
             _status.ForeColor = on ? Theme.Accent : busy ? Theme.Fg : Theme.Muted;
-            _node.Text = on && _e.Active != null
-                ? $"{_e.Active.Name}\n{_e.Active.Label}{(_e.Latency.TryGetValue(_e.Active.Id, out var l) && l > 0 ? $" · {l} мс" : "")}"
-                : _e.Status;
+            SyncNode();
             _switch.Enabled = on;
             _hint.Text = _e.S.Tun
                 ? (Elevation.IsAdmin ? "Режим «весь трафик»: через VPN идут все программы компьютера." : "Режим «весь трафик» включён, но нужны права администратора.")
@@ -466,6 +465,21 @@ namespace Locman7
             _tray.Text = on ? "Лоцман: подключено" : busy ? "Лоцман: поиск" : "Лоцман: выключено";
             if (_nodesPage.Visible) FillNodes();
             if (_sourcesPage.Visible) FillSources();
+        }
+
+        void SyncNode()
+        {
+            var on = _e.Phase == Phase.On;
+            _node.Text = on && _e.Active != null
+                ? $"{_e.Active.Name}\n{_e.Active.Label}{(_e.Latency.TryGetValue(_e.Active.Id, out var l) && l > 0 ? $" · {l} мс" : "")} · ↓ {Speed(_e.RateDown)}  ↑ {Speed(_e.RateUp)}"
+                : _e.Status;
+        }
+
+        static string Speed(long bps)
+        {
+            if (bps >= 1024 * 1024) return (bps / 1048576.0).ToString("0.0") + " МБ/с";
+            if (bps >= 1024) return (bps / 1024) + " КБ/с";
+            return bps + " Б/с";
         }
 
         void FillNodes()

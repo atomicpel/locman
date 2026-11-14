@@ -303,6 +303,18 @@ jobs:
           tr -d '\r' < tools/xray-win7.sha256 | sha256sum -c
           (cd xray-win7 && 7z x -y xray.zip xray.exe wintun.dll geoip.dat geosite.dat LICENSE LICENSE-Wintun > /dev/null && rm xray.zip && ls -la)
 
+      - name: Проверки (разбор ссылок, конфиги ядра, резервная копия)
+        run: |
+          set -o pipefail
+          dotnet build windows7/tests/Locman7.Tests.csproj -c Release -o tests7 2>&1 | tail -n 3
+          ./tests7/Locman7.Tests.exe cfg7 | tee report7/tests.txt
+          for f in batch connect tun; do
+            echo "xray -test $f.json"
+            XRAY_LOCATION_ASSET="$PWD/xray-win7" ./xray-win7/xray.exe run -test -c "cfg7/$f.json" 2>&1 | tail -n 1 | tee -a report7/tests.txt
+            grep -q "Configuration OK" <(XRAY_LOCATION_ASSET="$PWD/xray-win7" ./xray-win7/xray.exe run -test -c "cfg7/$f.json" 2>&1) \
+              || { echo "::error::Ядро не приняло cfg7/$f.json"; exit 1; }
+          done
+
       - name: Сборка (.NET Framework 4.8)
         run: |
           set -o pipefail
@@ -390,8 +402,10 @@ jobs:
           NOTES="release-notes/$PLATFORM.txt"
           [ -s "$NOTES" ] || { echo "::error::Нет заметок о выпуске: $NOTES"; exit 1; }
           mkdir -p dist prev
+          # Текущие файлы обновлений — прямо из ветки updates (не из кэша CDN: выпуски идут друг за другом).
+          git fetch --depth 1 origin updates || true
           for f in update.json update-windows.json update-win7.json; do
-            curl -sSfL -o "prev/$f" "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/updates/$f" || rm -f "prev/$f"
+            git show "origin/updates:$f" > "prev/$f" 2>/dev/null || rm -f "prev/$f"
           done
           # Счёт версий общий: номер не меньше последнего выпущенного и больше прошлого выпуска этой платформы
           # (одну правку для двух платформ можно выпустить под одним номером).
@@ -447,7 +461,7 @@ jobs:
   smoke:
     name: Проверка в эмуляторе
     # Эмулятор GitHub нестабилен под сетевой нагрузкой — запускаем вручную.
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/heads/release/')
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:

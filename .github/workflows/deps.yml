@@ -1,33 +1,96 @@
 name: Новые версии ядра
 
-# Раз в сутки проверяет, не вышли ли новые Xray-core, его сборка для Android и TUN-мост.
-# Если вышли — заводит задачу в репозитории: владельцу приходит письмо и уведомление GitHub.
+# Раз в сутки проверяет, не вышли ли новые Xray-core (вместе со сборкой для Android) и TUN-мост.
+# Если вышли — заводит задачу (владельцу приходит письмо и уведомление GitHub) и сам обновляет «Лоцман»:
+# закрепляет версии и контрольные суммы, собирает и проверяет, выпускает затронутые платформы.
+# Если сборка или проверки не прошли — ничего не меняет в main и пишет об этом в задаче.
 on:
   schedule:
     - cron: '23 5 * * *'
   workflow_dispatch:
     inputs:
       test:
-        description: 'Проверка сторожа: показать, какая задача была бы заведена для старой версии (ничего не создаёт)'
+        description: 'Проверка сторожа: показать, что было бы сделано для старой версии (ничего не меняет)'
         type: boolean
         default: false
 
 permissions:
-  contents: read
+  contents: write
   issues: write
+  actions: write
+
+concurrency:
+  group: deps
+  cancel-in-progress: false
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Проверка версий
+        id: check
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ inputs.test }}" = "true" ]; then
             DEPS_PRETEND_XRAY=v26.1.1 DEPS_PRETEND_HEV=2.0.0 python3 tools/check_deps.py --dry-run
           else
-            python3 tools/check_deps.py
+            python3 tools/check_deps.py --auto
+          fi
+
+      - name: Обновление ядра и выпуск
+        if: steps.check.outputs.bump != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          BUMP: ${{ steps.check.outputs.bump }}
+          PLATFORMS: ${{ steps.check.outputs.platforms }}
+          VERSION: ${{ steps.check.outputs.version }}
+          ISSUES: ${{ steps.check.outputs.issues }}
+        run: |
+          set -u
+          comment() { for i in $ISSUES; do gh issue comment "$i" --body "$1" || true; done; }
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 tools/bump_core.py $BUMP
+          git add tools release-notes
+          git commit -m "Ядро: $BUMP (автоматически), выпуск $VERSION для: $PLATFORMS"
+          SHA=$(git rev-parse HEAD)
+          # Выпуск — из отдельных веток; main меняем, только если все сборки прошли.
+          for p in $PLATFORMS; do
+            git push --force origin "HEAD:refs/heads/release/$p/v$VERSION"
+            gh workflow run build.yml --ref "release/$p/v$VERSION"
+          done
+          comment "Начал автообновление: \`$BUMP\` → выпуск **$VERSION** для: $PLATFORMS. Сборки: https://github.com/$GITHUB_REPOSITORY/actions/workflows/build.yml"
+          sleep 30
+          ok=""; bad=""
+          for p in $PLATFORMS; do
+            RUN=""
+            for t in $(seq 1 20); do
+              RUN=$(gh run list -w build.yml -b "release/$p/v$VERSION" -L 5 --json databaseId,headSha \
+                -q "[.[] | select(.headSha==\"$SHA\")][0].databaseId")
+              [ -n "$RUN" ] && break
+              sleep 15
+            done
+            if [ -n "$RUN" ] && gh run watch "$RUN" --exit-status --interval 60 > /dev/null; then
+              ok="$ok $p"
+            else
+              bad="$bad $p"
+            fi
+          done
+          if [ -z "$bad" ]; then
+            for t in 1 2 3; do
+              git pull --rebase -q origin main && git push -q origin HEAD:main && break
+              sleep 10
+            done
+            comment "Готово: выпуск **$VERSION** с новым ядром вышел для:$ok. Сборки и проверки прошли. https://github.com/$GITHUB_REPOSITORY/releases"
+            for i in $ISSUES; do gh issue close "$i" --reason completed || true; done
+          else
+            comment "Автообновление не прошло для:$bad (прошло:${ok:- нет}). В main ничего не менял — нужна ручная правка. Журналы: https://github.com/$GITHUB_REPOSITORY/actions/workflows/build.yml"
+            exit 1
           fi
