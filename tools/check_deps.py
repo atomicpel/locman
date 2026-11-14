@@ -46,6 +46,11 @@ def sha256_of(url):
         return f"не скачался ({e})"
 
 
+def quote(text, limit):
+    """Чужое описание выпуска: без @упоминаний (иначе GitHub уведомит посторонних людей)."""
+    return re.sub(r"@(?=\w)", "", (text or "")[:limit])
+
+
 def key(v):
     return [int(x) for x in re.findall(r"\d+", v)]
 
@@ -90,7 +95,7 @@ if key(core_v) > key(xray_now):
         "",
         "<details><summary>Что изменилось в ядре</summary>",
         "",
-        (core.get("body") or "")[:3000],
+        quote(core.get("body"), 3000),
         "",
         "</details>",
     ]
@@ -112,7 +117,7 @@ if key(hev_v) > key(hev_now):
             "",
             "Касается только Android. Обновлять стоит, если в описании есть исправления ошибок или безопасности.",
             "",
-            (hev.get("body") or "")[:2000],
+            quote(hev.get("body"), 2000),
         ]),
         None,
     ))
