@@ -1,0 +1,16 @@
+{
+ "versionCode": 10903,
+ "versionName": "1.9.3",
+ "published": "2026-11-14",
+ "notes": [
+  "Ядро Xray обновлено до v26.11.9: по умолчанию отпечаток Chrome 155+, который фильтры пока не распознают, и исправления",
+  "Обновления для Windows 10/11 теперь выходят отдельно от телефона и Windows 7: программа смотрит только свои выпуски"
+ ],
+ "assets": {
+  "windows-x64": {
+   "url": "https://github.com/atomicpel/locman/releases/download/windows-v1.9.3/Locman-1.9.3-windows-x64-setup.exe",
+   "sha256": "6281a5f17ee342a0e966682c097f690267067f65ca55e6660f03bfe60c1f360b",
+   "size": 20551974
+  }
+ }
+}
