@@ -310,7 +310,7 @@ namespace Locman7
             about.SetBounds(16, y + 136, 448, 90);
             var gh = Flat("Открыть страницу проекта", false);
             gh.SetBounds(16, y + 230, 230, 34);
-            gh.Click += (s, e) => System.Diagnostics.Process.Start("https://github.com/atomicpel/locman/releases/latest");
+            gh.Click += (s, e) => System.Diagnostics.Process.Start("https://github.com/atomicpel/locman/releases");
             _settingsPage.AutoScroll = true;
             _settingsPage.Controls.AddRange(new Control[] { save, load, backupHint, upd, about, gh });
 

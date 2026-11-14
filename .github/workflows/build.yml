@@ -2,8 +2,8 @@ name: Сборка
 
 on:
   push:
-    branches: [main, 'release/v*']
-    tags: ['v*']
+    # Выпуск: ветка release/<android|windows|win7>/vX.Y.Z — собирается и выпускается только эта платформа.
+    branches: [main, 'release/*/v*']
     paths-ignore:
       - '**.md'
       - 'catalog/**'
@@ -22,6 +22,7 @@ env:
 jobs:
   build:
     name: APK (arm64-v8a)
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/android/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -39,19 +40,7 @@ jobs:
 
       - name: Версия
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* || "$GITHUB_REF" == refs/heads/release/v* ]]; then
-            TAG="${GITHUB_REF_NAME#release/}"
-            echo "TAG=$TAG" >> "$GITHUB_ENV"
-            echo "RELEASE=1" >> "$GITHUB_ENV"
-            VERSION="${TAG#v}"
-            IFS=. read -r MA MI PA <<<"$VERSION"
-            CODE=$((MA * 10000 + MI * 100 + PA))
-          else
-            VERSION="0.0.${{ github.run_number }}"
-            CODE=${{ github.run_number }}
-          fi
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "CODE=$CODE" >> "$GITHUB_ENV"
+          source tools/ci_version.sh
           mkdir -p report
           { echo "Лоцман $VERSION ($CODE)"; flutter --version; java -version 2>&1; } | tee report/versions.txt
 
@@ -85,7 +74,7 @@ jobs:
           rm -f test/widget_test.dart
           python3 tools/patch_android.py > report/gradle-patch.txt
           cp catalog/catalog.json assets/catalog.json
-          python3 tools/changelog.py "$VERSION"
+          python3 tools/changelog.py "$VERSION" release-notes/android.txt
 
       - name: Анализ кода
         run: |
@@ -180,6 +169,7 @@ jobs:
 
   windows:
     name: Windows (x64)
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/windows/') }}
     runs-on: windows-latest
     timeout-minutes: 60
     env:
@@ -198,18 +188,8 @@ jobs:
 
       - name: Версия
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* || "$GITHUB_REF" == refs/heads/release/v* ]]; then
-            TAG="${GITHUB_REF_NAME#release/}"
-            VERSION="${TAG#v}"
-            IFS=. read -r MA MI PA <<<"$VERSION"
-            CODE=$((MA * 10000 + MI * 100 + PA))
-          else
-            VERSION="0.0.${{ github.run_number }}"
-            CODE=${{ github.run_number }}
-          fi
+          source tools/ci_version.sh
           XRAY=$(grep -oE 'XRAY_LIB_VERSION:-v[0-9.]+' tools/fetch_natives.sh | sed 's/.*:-//')
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "CODE=$CODE" >> "$GITHUB_ENV"
           echo "XRAY=$XRAY" >> "$GITHUB_ENV"
           mkdir -p report
           { echo "Лоцман для Windows $VERSION ($CODE), Xray $XRAY"; flutter --version; } | tee report/versions.txt
@@ -227,7 +207,7 @@ jobs:
           rm -f test/widget_test.dart
           python tools/patch_windows.py > report/windows-patch.txt 2>&1 || { cat report/windows-patch.txt; exit 1; }
           cp catalog/catalog.json assets/catalog.json
-          python tools/changelog.py "$VERSION"
+          python tools/changelog.py "$VERSION" release-notes/windows.txt
 
       - name: Сборка
         run: |
@@ -299,6 +279,7 @@ jobs:
 
   win7:
     name: Windows 7 (Лоцман Lite)
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/win7/') }}
     runs-on: windows-latest
     timeout-minutes: 30
     defaults:
@@ -309,14 +290,8 @@ jobs:
 
       - name: Версия
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* || "$GITHUB_REF" == refs/heads/release/v* ]]; then
-            TAG="${GITHUB_REF_NAME#release/}"
-            VERSION="${TAG#v}"
-          else
-            VERSION="0.0.${{ github.run_number }}"
-          fi
+          source tools/ci_version.sh
           XRAY=$(grep -oE 'XRAY_LIB_VERSION:-v[0-9.]+' tools/fetch_natives.sh | sed 's/.*:-//')
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "XRAY=$XRAY" >> "$GITHUB_ENV"
           mkdir -p report7
           { echo "Лоцман Lite для Windows 7 $VERSION, Xray $XRAY (сборка win7)"; dotnet --info | head -20; } | tee report7/versions.txt
@@ -392,8 +367,13 @@ jobs:
   release:
     name: Релиз
     needs: [build, windows, win7]
-    if: startsWith(github.ref, 'refs/heads/release/v') || startsWith(github.ref, 'refs/tags/v')
+    # Чужие платформы в выпуске пропущены (skipped) — это не ошибка.
+    if: ${{ always() && startsWith(github.ref, 'refs/heads/release/') && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
+    # Выпуски разных платформ пишут в одну ветку updates — по очереди.
+    concurrency:
+      group: release-updates
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
@@ -405,39 +385,63 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${GITHUB_REF_NAME#release/}"
-          VERSION="${TAG#v}"
-          IFS=. read -r MA MI PA <<<"$VERSION"
-          CODE=$((MA * 10000 + MI * 100 + PA))
-          mkdir -p dist
-          cp art/locman-apk/*.apk dist/
-          cp art/locman-windows/*setup.exe art/locman-windows/*portable.zip dist/
-          cp art/locman-win7/*setup.exe art/locman-win7/*portable.zip dist/
-          (cd dist && sha256sum *.apk *.exe *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt)
-          python3 tools/make_update_json.py "$VERSION" "$CODE" "$GITHUB_REPOSITORY" "$TAG" \
-            release-notes.txt dist/*.apk dist/*setup.exe > dist/update.json
-          cat dist/update.json
-          CERT=$(grep -m1 'SHA-256' art/report/cert.txt | awk '{print toupper($NF)}' | sed 's/../&:/g; s/:$//')
+          source tools/ci_version.sh
+          [ -n "$RELEASE" ] || { echo "::error::Ветка выпуска должна называться release/<android|windows|win7>/vX.Y.Z"; exit 1; }
+          NOTES="release-notes/$PLATFORM.txt"
+          [ -s "$NOTES" ] || { echo "::error::Нет заметок о выпуске: $NOTES"; exit 1; }
+          mkdir -p dist prev
+          for f in update.json update-windows.json update-win7.json; do
+            curl -sSfL -o "prev/$f" "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/updates/$f" || rm -f "prev/$f"
+          done
+          # Счёт версий общий: номер не меньше последнего выпущенного и больше прошлого выпуска этой платформы
+          # (одну правку для двух платформ можно выпустить под одним номером).
+          python3 - "$CODE" "$PLATFORM" <<'PY'
+          import glob, json, os, sys
+          code, platform = int(sys.argv[1]), sys.argv[2]
+          codes = {os.path.basename(f): json.load(open(f, encoding="utf-8"))["versionCode"] for f in glob.glob("prev/*.json")}
+          own = codes.get({"android": "update.json", "windows": "update-windows.json", "win7": "update-win7.json"}[platform], 0)
+          top = max(codes.values() or [0])
+          if code <= own or code < top:
+              sys.exit(f"::error::Номер версии занят: у этой платформы уже {own}, последний общий {top}")
+          PY
+          case "$PLATFORM" in
+            android)
+              NAME="Лоцман для Android"
+              cp art/locman-apk/*.apk dist/
+              MAIN=$(ls dist/*.apk)
+              CERT=$(grep -m1 'SHA-256' art/report/cert.txt | awk '{print toupper($NF)}' | sed 's/../&:/g; s/:$//')
+              HOW="Android (arm64): Locman-$VERSION-arm64-v8a.apk. Отпечаток сертификата подписи (SHA-256): $CERT" ;;
+            windows)
+              NAME="Лоцман для Windows 10/11"
+              cp art/locman-windows/*setup.exe art/locman-windows/*portable.zip dist/
+              MAIN=$(ls dist/*setup.exe)
+              HOW="Windows 10/11: Locman-$VERSION-windows-x64-setup.exe (установщик) или Locman-$VERSION-windows-x64-portable.zip (без установки)." ;;
+            win7)
+              NAME="Лоцман Lite для Windows 7"
+              cp art/locman-win7/*setup.exe art/locman-win7/*portable.zip dist/
+              MAIN=$(ls dist/*setup.exe)
+              HOW="Windows 7 SP1 (64 бит): Locman-Lite-$VERSION-win7-x64-setup.exe (установщик, .NET Framework 4.8 внутри) или Locman-Lite-$VERSION-win7-x64-portable.zip (без установки, нужен .NET Framework 4.8)." ;;
+          esac
+          (cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          python3 tools/make_update_json.py "$PLATFORM" "$VERSION" "$CODE" "$GITHUB_REPOSITORY" "$TAG" "$NOTES" prev json "$MAIN"
           {
             echo "Что нового:"
-            sed 's/^/- /' release-notes.txt
+            sed 's/^/- /' "$NOTES"
             echo
-            echo "Android (Poco X7 Pro и другие на arm64): Locman-$VERSION-arm64-v8a.apk."
-            echo "Windows 10/11: Locman-$VERSION-windows-x64-setup.exe (установщик) или Locman-$VERSION-windows-x64-portable.zip (без установки)."
-            echo "Windows 7 SP1 (64 бит): Locman-Lite-$VERSION-win7-x64-setup.exe или Locman-Lite-$VERSION-win7-x64-portable.zip — облегчённая версия, нужен .NET Framework 4.8."
+            echo "$HOW"
             echo
-            echo "Отпечаток сертификата подписи APK (SHA-256): $CERT"
-          } > dist/NOTES.md
-          gh release create "$TAG" --target "$GITHUB_SHA" dist/*.apk dist/*.exe dist/*.zip dist/SHA256SUMS.txt dist/update.json \
-            --title "Лоцман $VERSION" --notes-file dist/NOTES.md --latest
+            echo "Выпуски для других платформ — отдельно: https://github.com/$GITHUB_REPOSITORY/releases"
+          } > NOTES.md
+          gh release create "$TAG" --target "$GITHUB_SHA" dist/* json/*.json \
+            --title "$NAME $VERSION" --notes-file NOTES.md --latest
           git config user.name "github-actions"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cp dist/update.json "$RUNNER_TEMP/update.json"
+          cp -r json "$RUNNER_TEMP/json"
           git fetch --depth 1 origin updates && git checkout -B updates origin/updates || git checkout --orphan updates
           git rm -rf --cached . > /dev/null 2>&1 || true
-          cp "$RUNNER_TEMP/update.json" update.json
-          git add update.json
-          git commit -m "update.json для $TAG"
+          cp "$RUNNER_TEMP"/json/*.json .
+          git add update*.json
+          git commit -m "Обновления: $TAG"
           git push origin HEAD:updates --force
 
   smoke:

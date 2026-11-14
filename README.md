@@ -12,7 +12,7 @@ VPN-клиент для Android и Windows 10/11 на ядре Xray. Одна к
 
 ## Установка
 
-Скачайте `Locman-X.Y.Z-arm64-v8a.apk` из [Releases](https://github.com/atomicpel/locman/releases/latest) и установите.
+Скачайте `Locman-X.Y.Z-arm64-v8a.apk` из [Releases](https://github.com/atomicpel/locman/releases) и установите (выпуски для Android, Windows 10/11 и Windows 7 идут отдельно).
 На Xiaomi/Poco (HyperOS) в «Ещё → Подключение» разрешите работу в фоне и автозапуск, иначе система может выключать VPN.
 
 ### Windows 10/11

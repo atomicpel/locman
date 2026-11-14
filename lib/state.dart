@@ -3394,10 +3394,12 @@ class AppState extends ChangeNotifier {
     updateError = null;
     notifyListeners();
     try {
+      // У каждой платформы свой файл: выпуск для одной не предлагает обновление остальным.
+      final file = Native.win ? 'update-windows.json' : 'update.json';
       final r = await Net.getAny([
-        'https://github.com/$repo/releases/latest/download/update.json',
-        'https://raw.githubusercontent.com/$repo/updates/update.json',
-        'https://cdn.jsdelivr.net/gh/$repo@updates/update.json',
+        'https://github.com/$repo/releases/latest/download/$file',
+        'https://raw.githubusercontent.com/$repo/updates/$file',
+        'https://cdn.jsdelivr.net/gh/$repo@updates/$file',
       ]);
       final j = jsonDecode(r.body) as Map<String, dynamic>;
       final code = (j['versionCode'] as num).toInt();

@@ -1,0 +1,33 @@
+name: Новые версии ядра
+
+# Раз в сутки проверяет, не вышли ли новые Xray-core, его сборка для Android и TUN-мост.
+# Если вышли — заводит задачу в репозитории: владельцу приходит письмо и уведомление GitHub.
+on:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'Проверка сторожа: показать, какая задача была бы заведена для старой версии (ничего не создаёт)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Проверка версий
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ inputs.test }}" = "true" ]; then
+            DEPS_PRETEND_XRAY=v26.1.1 DEPS_PRETEND_HEV=2.0.0 python3 tools/check_deps.py --dry-run
+          else
+            python3 tools/check_deps.py
+          fi

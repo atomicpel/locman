@@ -325,7 +325,7 @@ class Native {
 
   /// Поделиться установленным приложением (Android — сам APK из системы).
   static Future<void> shareApp() => win
-      ? Clipboard.setData(const ClipboardData(text: 'https://github.com/atomicpel/locman/releases/latest'))
+      ? Clipboard.setData(const ClipboardData(text: 'https://github.com/atomicpel/locman/releases'))
       : _core.invokeMethod('shareApk');
 
   static Future<void> openBattery() => _core.invokeMethod('openBattery');

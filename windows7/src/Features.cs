@@ -246,7 +246,7 @@ namespace Locman7
         }
     }
 
-    /// <summary>Обновление внутри программы: update.json из ветки updates, установщик для win7-x64,
+    /// <summary>Обновление внутри программы: свой файл update-win7.json из ветки updates, установщик для win7-x64,
     /// проверка SHA-256, запуск установщика.</summary>
     static class Updater
     {
@@ -255,8 +255,8 @@ namespace Locman7
         public static Info Check(int? viaPort)
         {
             var text = Net.Get(new[] {
-                $"https://raw.githubusercontent.com/{Net.Repo}/updates/update.json",
-                $"https://cdn.jsdelivr.net/gh/{Net.Repo}@updates/update.json",
+                $"https://raw.githubusercontent.com/{Net.Repo}/updates/update-win7.json",
+                $"https://cdn.jsdelivr.net/gh/{Net.Repo}@updates/update-win7.json",
             }, viaPort);
             if (!(Json.Parse(text) is Dictionary<string, object> j)) return null;
             var version = Json.Str(j, "versionName");
