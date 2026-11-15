@@ -1,16 +1,15 @@
 {
- "versionCode": 10903,
- "versionName": "1.9.3",
- "published": "2026-11-14",
+ "versionCode": 10904,
+ "versionName": "1.9.4",
+ "published": "2026-11-15",
  "notes": [
-  "Ядро Xray обновлено до v26.11.9: по умолчанию отпечаток Chrome 155+, который фильтры пока не распознают, и исправления",
-  "Обновления для Windows 10/11 теперь выходят отдельно от телефона и Windows 7: программа смотрит только свои выпуски"
+  "«Сайты напрямую» (Ещё → Сайты напрямую): свои сайты, адреса и подсети, которые открываются мимо узла, со своего IP. Поддомены входят сами, можно вставить ссылку целиком. Работает и в «системном прокси», и в TUN"
  ],
  "assets": {
   "windows-x64": {
-   "url": "https://github.com/atomicpel/locman/releases/download/windows-v1.9.3/Locman-1.9.3-windows-x64-setup.exe",
-   "sha256": "6281a5f17ee342a0e966682c097f690267067f65ca55e6660f03bfe60c1f360b",
-   "size": 20551974
+   "url": "https://github.com/atomicpel/locman/releases/download/windows-v1.9.4/Locman-1.9.4-windows-x64-setup.exe",
+   "sha256": "f596d02a73b2e9c090ed1e12412cca824be48411934a9aa92b183eb42e432b9e",
+   "size": 20560350
   }
  }
 }

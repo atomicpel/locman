@@ -14,9 +14,9 @@
    "size": 28582924
   },
   "windows-x64": {
-   "url": "https://github.com/atomicpel/locman/releases/download/windows-v1.9.3/Locman-1.9.3-windows-x64-setup.exe",
-   "sha256": "6281a5f17ee342a0e966682c097f690267067f65ca55e6660f03bfe60c1f360b",
-   "size": 20551974
+   "url": "https://github.com/atomicpel/locman/releases/download/windows-v1.9.4/Locman-1.9.4-windows-x64-setup.exe",
+   "sha256": "f596d02a73b2e9c090ed1e12412cca824be48411934a9aa92b183eb42e432b9e",
+   "size": 20560350
   },
   "win7-x64": {
    "url": "https://github.com/atomicpel/locman/releases/download/win7-v1.9.4/Locman-Lite-1.9.4-win7-x64-setup.exe",
