@@ -41,6 +41,9 @@ namespace Locman7
         public string Theme = "dark";
 
         public bool AutoServices;
+
+        /// <summary>Свои сайты, адреса и подсети мимо узла.</summary>
+        public List<string> DirectSites = new List<string>();
         public HashSet<string> Enabled = new HashSet<string>(), Disabled = new HashSet<string>();
         public List<Source> Mine = new List<Source>();
         public string LastNode;
@@ -73,6 +76,7 @@ namespace Locman7
                 s.Tun = Equals(j.ContainsKey("tun") ? j["tun"] : false, true);
                 s.AutoServices = Equals(j.ContainsKey("autoServices") ? j["autoServices"] : false, true);
                 s.Theme = Json.Str(j, "theme") == "light" ? "light" : "dark";
+                if (j.TryGetValue("directSites", out var ds) && ds is object[] da) s.DirectSites = da.Select(x => x.ToString()).ToList();
                 s.Enabled = Strings(j, "enabled");
                 s.Disabled = Strings(j, "disabled");
                 if (j.TryGetValue("mine", out var mine) && mine is object[] arr)
@@ -99,7 +103,7 @@ namespace Locman7
             var j = new Dictionary<string, object> {
                 { "mode", Mode }, { "directRu", DirectRu }, { "autostart", Autostart }, { "startMinimized", StartMinimized },
                 { "closeToTray", CloseToTray }, { "lastNode", LastNode }, { "tun", Tun }, { "theme", Theme },
-                { "autoServices", AutoServices }, { "enabled", Enabled.ToArray() },
+                { "autoServices", AutoServices }, { "directSites", DirectSites.ToArray() }, { "enabled", Enabled.ToArray() },
                 { "disabled", Disabled.ToArray() }, { "mine", Mine.Select(m => m.ToJson()).ToArray() },
             };
             var tmp = FilePath + ".tmp";

@@ -279,6 +279,32 @@ namespace Locman7
             };
             AddRow(_settingsPage, ref y, "Тема", theme);
             AddCheck(_settingsPage, ref y, "Российские сайты напрямую (банки, Госуслуги, Яндекс, VK)", _e.S.DirectRu, v => _e.S.DirectRu = v);
+            var sitesLabel = new Label { Text = "Свои сайты напрямую, мимо узла (по одному в строке; можно ссылку, адрес или подсеть):", ForeColor = Theme.Muted };
+            sitesLabel.SetBounds(16, y, 448, 20);
+            var sites = new TextBox
+            {
+                Multiline = true, ScrollBars = ScrollBars.Vertical, BackColor = Theme.Surface, ForeColor = Theme.Fg,
+                BorderStyle = BorderStyle.FixedSingle, Text = string.Join(Environment.NewLine, _e.S.DirectSites),
+            };
+            sites.SetBounds(16, y + 22, 448, 70);
+            var sitesSave = Flat("Сохранить список сайтов", false);
+            sitesSave.SetBounds(16, y + 98, 220, 32);
+            sitesSave.Click += (s, e) =>
+            {
+                var parts = sites.Text.Split(new[] { '\r', '\n', ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                var good = parts.Select(XrayConfig.NormalizeSite).Where(x => x != null).Distinct().ToList();
+                var bad = parts.Where(x => XrayConfig.NormalizeSite(x) == null).ToList();
+                _e.S.DirectSites = good;
+                _e.S.Save();
+                sites.Text = string.Join(Environment.NewLine, good);
+                MessageBox.Show(this,
+                    "Сохранено сайтов и адресов: " + good.Count +
+                    (bad.Count > 0 ? "\nНе похоже на сайт: " + string.Join(", ", bad.Take(3)) : "") +
+                    (_e.Phase == Phase.On ? "\n\nСписок заработает после переподключения («Найти заново» или «Переключить»)." : ""),
+                    "Лоцман");
+            };
+            _settingsPage.Controls.AddRange(new Control[] { sitesLabel, sites, sitesSave });
+            y += 140;
             AddCheck(_settingsPage, ref y, "Запускать вместе с Windows", _e.S.Autostart, v => { _e.S.Autostart = v; try { Autostart.Apply(v, _e.S.Tun); } catch { } });
             AddCheck(_settingsPage, ref y, "Проверять сервисы сразу после подключения", _e.S.AutoServices, v => _e.S.AutoServices = v);
             AddCheck(_settingsPage, ref y, "Запускать свёрнутым к часам", _e.S.StartMinimized, v => _e.S.StartMinimized = v);

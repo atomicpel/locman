@@ -80,11 +80,20 @@ namespace Locman7
             var s2 = new Settings();
             Check(Backup.Restore(s2, copy) == 2 && s2.Mine.Any(m => m.Keys == Reality), "резервная копия");
 
+            // Сайты напрямую
+            Check(XrayConfig.NormalizeSite("https://www.Example.com/page?x=1") == "example.com", "ссылка → домен");
+            Check(XrayConfig.NormalizeSite("*.vk.com") == "vk.com", "*.домен");
+            Check(XrayConfig.NormalizeSite("сайт.рф") == "xn--80aswg.xn--p1ai", "кириллический домен");
+            Check(XrayConfig.NormalizeSite("10.0.0.0/8") == "10.0.0.0/8", "подсеть");
+            Check(XrayConfig.NormalizeSite("не сайт") == null, "мусор отбрасывается");
+            var withSites = XrayConfig.Connect(LinkParser.Parse(Trojan, "s"), 10808, 10809, false, false, 0, new[] { "example.com", "1.2.3.4" });
+            Check(withSites.Contains("domain:example.com") && withSites.Contains("\"1.2.3.4\""), "сайты напрямую в правилах ядра");
+
             // Конфиги ядра — проверит xray.exe run -test
             var nodes = new[] { Reality, Xhttp, Ws, Trojan, Hy2, vm }.Select(l => LinkParser.Parse(l, "s")).ToList();
             Check(nodes.All(n => n != null), "все узлы для конфигов разобрались");
             File.WriteAllText(Path.Combine(dir, "batch.json"), XrayConfig.Batch(nodes, nodes.Select((_, i) => 20000 + i).ToList()));
-            File.WriteAllText(Path.Combine(dir, "connect.json"), XrayConfig.Connect(nodes[0], 10808, 10809, true, false, 10810));
+            File.WriteAllText(Path.Combine(dir, "connect.json"), XrayConfig.Connect(nodes[0], 10808, 10809, true, false, 10810, new[] { "example.com", "xn--80aswg.xn--p1ai", "1.2.3.0/24" }));
             File.WriteAllText(Path.Combine(dir, "tun.json"), XrayConfig.Connect(nodes[1], 10808, 10809, true, true, 10810));
 
             Console.WriteLine($"Проверок: {_ok + _fails}, ошибок: {_fails}");

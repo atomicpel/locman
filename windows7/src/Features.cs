@@ -201,7 +201,7 @@ namespace Locman7
             var j = new Dictionary<string, object> {
                 { "app", "locman" }, { "format", 1 }, { "created", DateTime.Now.ToString("s") }, { "version", "Lite " + AppInfo.Version },
                 { "settings", new Dictionary<string, object> {
-                    { "mine", mine }, { "directRu", s.DirectRu }, { "lite", new Dictionary<string, object> {
+                    { "mine", mine }, { "directRu", s.DirectRu }, { "directSites", s.DirectSites.ToArray() }, { "lite", new Dictionary<string, object> {
                         { "mode", s.Mode }, { "tun", s.Tun }, { "enabled", s.Enabled.ToArray() }, { "disabled", s.Disabled.ToArray() },
                         { "theme", s.Theme },
                     } },
@@ -234,6 +234,9 @@ namespace Locman7
                 }
             }
             if (st.TryGetValue("directRu", out var dr) && dr is bool b) s.DirectRu = b;
+            if (st.TryGetValue("directSites", out var dsv) && dsv is object[] dsa)
+                foreach (var x in dsa.Select(o => XrayConfig.NormalizeSite(o.ToString())).Where(x => x != null))
+                    if (!s.DirectSites.Contains(x)) s.DirectSites.Add(x);
             if (st.TryGetValue("lite", out var lite) && lite is Dictionary<string, object> l)
             {
                 var mode = Json.Str(l, "mode");

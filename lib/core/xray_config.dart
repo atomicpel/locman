@@ -114,6 +114,7 @@ class XrayConfig {
     WinTunnel? win,
     List<String> tunRoutes = const [],
     bool joinConns = false,
+    List<String> directSites = const [],
   }) {
     final provider = node.isJson ? jsonDecode(node.raw) as Map<String, dynamic> : null;
     final frag = (profile?.frag ?? fragment) && node.canFragment;
@@ -274,6 +275,19 @@ class XrayConfig {
               'domain': [for (final d in directDomains) 'domain:$d'],
               'outboundTag': 'direct',
             },
+          // Сайты, которые пользователь сам отправил мимо узла.
+          if (directSites.any((d) => !isIpOrCidr(d)))
+            {
+              'type': 'field',
+              'domain': [for (final d in directSites) if (!isIpOrCidr(d)) 'domain:$d'],
+              'outboundTag': 'direct',
+            },
+          if (directSites.any(isIpOrCidr))
+            {
+              'type': 'field',
+              'ip': [for (final d in directSites) if (isIpOrCidr(d)) d],
+              'outboundTag': 'direct',
+            },
           if (balancerTag != null) {'type': 'field', 'network': 'tcp,udp', 'balancerTag': balancerTag},
         ],
         if (balancers != null) 'balancers': balancers,
@@ -282,6 +296,80 @@ class XrayConfig {
       if (provider?['burstObservatory'] != null) config['burstObservatory'] = provider!['burstObservatory'];
     }
     return jsonEncode(config);
+  }
+
+  static final _ipv4 = RegExp(r'^\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?$');
+
+  /// IPv4/IPv6-адрес или подсеть (192.168.0.0/16, 2001:db8::/32).
+  static bool isIpOrCidr(String s) => _ipv4.hasMatch(s) || (s.contains(':') && RegExp(r'^[0-9a-fA-F:]+(/\d{1,3})?$').hasMatch(s));
+
+  /// Запись «сайт напрямую» из того, что вставил пользователь: ссылка, *.домен, домен, адрес или подсеть.
+  /// null — не похоже ни на что из этого.
+  static String? normalizeSite(String raw) {
+    var t = raw.trim().toLowerCase();
+    if (t.isEmpty) return null;
+    if (isIpOrCidr(t)) return t;
+    if (t.contains('://')) t = Uri.tryParse(t)?.host ?? '';
+    t = t.split('/').first.split('?').first;
+    if (t.contains(':') && !t.startsWith('[')) t = t.split(':').first;
+    if (t.startsWith('*.')) t = t.substring(2);
+    if (t.startsWith('.')) t = t.substring(1);
+    if (t.startsWith('www.')) t = t.substring(4);
+    if (isIpOrCidr(t)) return t;
+    final ok = RegExp(r'^([a-z0-9а-яё]([a-z0-9а-яё-]{0,61}[a-z0-9а-яё])?\.)+[a-z0-9а-яё-]{2,63}$').hasMatch(t);
+    if (!ok) return null;
+    // Кириллические домены — в punycode, как их видит ядро (сайт.рф → xn--80aswg.xn--p1ai).
+    return t.split('.').map(_puny).join('.');
+  }
+
+  static String _puny(String label) {
+    if (!RegExp(r'[^\x00-\x7f]').hasMatch(label)) return label;
+    const base = 36, tMin = 1, tMax = 26, skew = 38, damp = 700;
+    final input = label.runes.toList();
+    final out = StringBuffer();
+    for (final c in input) {
+      if (c < 0x80) out.writeCharCode(c);
+    }
+    final basic = out.length;
+    var h = basic;
+    if (basic > 0) out.write('-');
+    var n = 128, delta = 0, bias = 72;
+    int adapt(int d, int num, bool first) {
+      d = first ? d ~/ damp : d ~/ 2;
+      d += d ~/ num;
+      var k = 0;
+      while (d > ((base - tMin) * tMax) ~/ 2) {
+        d ~/= base - tMin;
+        k += base;
+      }
+      return k + (base - tMin + 1) * d ~/ (d + skew);
+    }
+
+    String digit(int d) => String.fromCharCode(d + (d < 26 ? 97 : 22));
+    while (h < input.length) {
+      final m = input.where((c) => c >= n).reduce((a, b) => a < b ? a : b);
+      delta += (m - n) * (h + 1);
+      n = m;
+      for (final c in input) {
+        if (c < n) delta++;
+        if (c == n) {
+          var q = delta;
+          for (var k = base;; k += base) {
+            final t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+            if (q < t) break;
+            out.write(digit(t + (q - t) % (base - t)));
+            q = (q - t) ~/ (base - t);
+          }
+          out.write(digit(q));
+          bias = adapt(delta, h + 1, h == basic);
+          delta = 0;
+          h++;
+        }
+      }
+      delta++;
+      n++;
+    }
+    return 'xn--$out';
   }
 
   static String? _nb(String? s) => (s == null || s.trim().isEmpty) ? null : s;

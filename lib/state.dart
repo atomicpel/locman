@@ -24,7 +24,7 @@ enum Phase { off, seek, on, fail }
 
 enum AppTab { home, nodes, sources, more }
 
-enum SettingsPage { look, link, apps, safe, probe, services, traffic, backup, radio, about }
+enum SettingsPage { look, link, apps, sites, safe, probe, services, traffic, backup, radio, about }
 
 /// Сервисы, страницы которых можно проверить через узлы.
 const serviceMeta = {
@@ -258,6 +258,9 @@ class AppState extends ChangeNotifier {
   String probe = 'normal';
   String dns = 'cloud';
   bool directRu = true;
+
+  /// Сайты, адреса и подсети, которые пользователь сам отправил мимо узла (на всех платформах).
+  List<String> directSites = [];
   bool autoConnect = false;
   bool hideInsecure = true;
   bool hideDupes = false;
@@ -627,6 +630,7 @@ class AppState extends ChangeNotifier {
     probe = probeMeta.containsKey(j['probe']) ? j['probe'] as String : 'normal';
     dns = dnsMeta.containsKey(j['dns']) ? j['dns'] as String : 'cloud';
     directRu = pick('directRu', true);
+    directSites = ((j['directSites'] as List?) ?? const []).map((e) => e.toString()).toList();
     autoConnect = pick('autoConnect', false);
     hideInsecure = pick('hideInsecure', true);
     hideDupes = pick('hideDupes', false);
@@ -701,6 +705,7 @@ class AppState extends ChangeNotifier {
         'probe': probe,
         'dns': dns,
         'directRu': directRu,
+        'directSites': directSites,
         'autoConnect': autoConnect,
         'hideInsecure': hideInsecure,
         'hideDupes': hideDupes,
@@ -1024,6 +1029,35 @@ class AppState extends ChangeNotifier {
     _set(() => directRu = v);
     _reapply();
   }
+
+  /// Добавить сайты напрямую: по одному в строке или через пробел/запятую. Возвращает текст для пользователя.
+  String addDirectSites(String text) {
+    final parts = text.split(RegExp(r'[\s,;]+')).where((t) => t.trim().isNotEmpty).toList();
+    final added = <String>[];
+    final bad = <String>[];
+    for (final p in parts) {
+      final n = XrayConfig.normalizeSite(p);
+      if (n == null) {
+        bad.add(p);
+      } else if (!directSites.contains(n) && !added.contains(n)) {
+        added.add(n);
+      }
+    }
+    if (added.isNotEmpty) {
+      _set(() => directSites = [...directSites, ...added]);
+      _reapply();
+    }
+    return [
+      if (added.isNotEmpty) 'Добавлено: ${added.join(', ')}',
+      if (added.isEmpty && bad.isEmpty) 'Уже в списке',
+      if (bad.isNotEmpty) 'Не похоже на сайт или адрес: ${bad.take(3).join(', ')}',
+    ].join('. ');
+  }
+
+  void removeDirectSite(String site) {
+    _set(() => directSites = directSites.where((d) => d != site).toList());
+    _reapply();
+  }
   void setAutoConnect(bool v) => _set(() => autoConnect = v);
   void setHideInsecure(bool v) => _set(() => hideInsecure = v);
   void setHideDupes(bool v) => _set(() => hideDupes = v);
@@ -1094,6 +1128,7 @@ class AppState extends ChangeNotifier {
       testKey = 'google';
       pinnedId = null;
       excludes.clear();
+      directSites = [];
       enabledOverrides.clear();
       intervals.clear();
       journal.clear();
@@ -2873,6 +2908,7 @@ class AppState extends ChangeNotifier {
           'config': XrayConfig.build(n,
               local: local,
               directRu: directRu,
+              directSites: directSites,
               dns: dns,
               fragment: _fragFor(n),
               xrayTun: !Native.win && tunEngine == 'xray',
@@ -2958,6 +2994,7 @@ class AppState extends ChangeNotifier {
     final config = XrayConfig.build(target,
         local: local,
         directRu: directRu,
+        directSites: directSites,
         dns: dns,
         fragment: _fragFor(n),
         xrayTun: xrayTun,

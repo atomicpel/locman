@@ -497,4 +497,17 @@ void main() {
     expect(sub.nodes.first.params['sni'], 'a.ru');
     expect(sub.nodes.last.name, 'T');
   });
+
+  test('Сайты напрямую: разбор и правила ядра', () {
+    expect(XrayConfig.normalizeSite('https://www.Example.com/page?x=1'), 'example.com');
+    expect(XrayConfig.normalizeSite('*.vk.com'), 'vk.com');
+    expect(XrayConfig.normalizeSite('сайт.рф'), 'xn--80aswg.xn--p1ai');
+    expect(XrayConfig.normalizeSite('10.0.0.0/8'), '10.0.0.0/8');
+    expect(XrayConfig.normalizeSite('не сайт'), isNull);
+    final c = jsonDecode(XrayConfig.build(LinkParser.parse(vless)!, local: local, directSites: ['example.com', '1.2.3.4']))
+        as Map<String, dynamic>;
+    final rules = ((c['routing'] as Map)['rules'] as List).cast<Map>();
+    expect(rules.any((r) => (r['domain'] as List?)?.contains('domain:example.com') == true && r['outboundTag'] == 'direct'), isTrue);
+    expect(rules.any((r) => (r['ip'] as List?)?.contains('1.2.3.4') == true && r['outboundTag'] == 'direct'), isTrue);
+  });
 }

@@ -120,12 +120,41 @@ namespace Locman7
         }
 
         /// <summary>Подключение: локальные входы SOCKS и HTTP только на 127.0.0.1 (их берёт системный прокси).</summary>
-        public static string Connect(Node n, int socksPort, int httpPort, bool directRu, bool tun = false, int metricsPort = 0)
+        static readonly System.Text.RegularExpressions.Regex IpRe = new System.Text.RegularExpressions.Regex(@"^(\d{1,3}(\.\d{1,3}){3}|[0-9a-f:]*:[0-9a-f:]+)(/\d{1,3})?$");
+        static readonly System.Text.RegularExpressions.Regex DomainRe = new System.Text.RegularExpressions.Regex(@"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$");
+
+        public static bool IsIp(string s) => IpRe.IsMatch(s);
+
+        /// <summary>Запись «сайт напрямую»: ссылка, *.домен, домен, адрес или подсеть. null — не похоже.</summary>
+        public static string NormalizeSite(string raw)
+        {
+            var t = (raw ?? "").Trim().ToLowerInvariant();
+            if (t.Length == 0) return null;
+            if (IsIp(t)) return t;
+            var scheme = t.IndexOf("://", StringComparison.Ordinal);
+            if (scheme >= 0) t = t.Substring(scheme + 3);
+            t = t.Split('/', '?', '#')[0];
+            if (t.Contains(":")) t = t.Split(':')[0];
+            if (t.StartsWith("*.")) t = t.Substring(2);
+            t = t.TrimStart('.');
+            if (t.StartsWith("www.")) t = t.Substring(4);
+            if (IsIp(t)) return t;
+            try { t = new System.Globalization.IdnMapping().GetAscii(t); } catch { return null; }
+            return DomainRe.IsMatch(t) ? t : null;
+        }
+
+        public static string Connect(Node n, int socksPort, int httpPort, bool directRu, bool tun = false, int metricsPort = 0,
+            IList<string> directSites = null)
         {
             var rules = new List<object>();
             // TUN: сам «Лоцман» и ядра проверки узлов ходят напрямую, а не через текущий узел.
             if (tun) rules.Add(D("type", "field", "process", new object[] { "xray.exe", "Locman7.exe" }, "outboundTag", "direct"));
             rules.Add(D("type", "field", "ip", new object[] { "geoip:private" }, "outboundTag", "direct"));
+            var sites = directSites ?? new string[0];
+            var domains = sites.Where(x => !IsIp(x)).Select(x => (object)("domain:" + x)).ToArray();
+            var ips = sites.Where(IsIp).Select(x => (object)x).ToArray();
+            if (domains.Length > 0) rules.Add(D("type", "field", "domain", domains, "outboundTag", "direct"));
+            if (ips.Length > 0) rules.Add(D("type", "field", "ip", ips, "outboundTag", "direct"));
             if (directRu)
             {
                 rules.Add(D("type", "field", "domain", new object[] { "domain:ru", "domain:su", "domain:xn--p1ai", "domain:xn--d1acj3b",

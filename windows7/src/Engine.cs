@@ -397,7 +397,7 @@ namespace Locman7
                 StopCore();
                 XrayProcess xray;
                 _metricsPort = Net.FreePort();
-                try { xray = new XrayProcess(XrayConfig.Connect(n, S.SocksPort, S.HttpPort, S.DirectRu, S.Tun && Elevation.IsAdmin, _metricsPort), line => { if (line.Contains("[Error]") || line.Contains("failed")) Log("Xray: " + line); }); }
+                try { xray = new XrayProcess(XrayConfig.Connect(n, S.SocksPort, S.HttpPort, S.DirectRu, S.Tun && Elevation.IsAdmin, _metricsPort, S.DirectSites), line => { if (line.Contains("[Error]") || line.Contains("failed")) Log("Xray: " + line); }); }
                 catch (Exception e) { Log("Xray не запустился: " + e.Message); return false; }
                 if (!xray.WaitReady(S.HttpPort, 6000))
                 {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/ru.dart';
+import '../core/xray_config.dart';
 import '../engine/native.dart';
 import '../state.dart';
 import 'backdrop.dart';
@@ -12,6 +13,7 @@ String settingsTitle(SettingsPage page) => switch (page) {
       SettingsPage.look => 'Оформление',
       SettingsPage.link => 'Подключение',
       SettingsPage.apps => 'Мимо узла',
+      SettingsPage.sites => 'Сайты напрямую',
       SettingsPage.safe => 'Безопасность',
       SettingsPage.probe => 'Проверка узлов',
       SettingsPage.services => 'Проверка сервисов',
@@ -31,6 +33,7 @@ class MoreScreen extends StatelessWidget {
       SettingsPage.look => _LookPage(s: s),
       SettingsPage.link => _LinkPage(s: s),
       SettingsPage.apps => _AppsPage(s: s),
+      SettingsPage.sites => _SitesPage(s: s),
       SettingsPage.safe => _SafePage(s: s),
       SettingsPage.probe => _ProbePage(s: s),
       SettingsPage.services => _ServicesPage(s: s),
@@ -54,6 +57,8 @@ class _MoreIndex extends StatelessWidget {
       (SettingsPage.look, 'Оформление', skinMeta[s.skin]!.$1),
       (SettingsPage.link, 'Подключение', 'Режим ${modeMeta[s.mode]!.$1}${s.pickFrom == 'reality' ? ', только Reality' : ''}${s.countries == 'noRu' ? ', без RU' : ''}${Native.win ? (s.winMode == 'tun' ? ', TUN' : ', системный прокси') : ', работа в фоне'}'),
       if (!Native.win) (SettingsPage.apps, 'Мимо узла', s.excludes.isEmpty ? 'Приложения без туннеля' : 'Выбрано: ${s.excludes.length}'),
+      (SettingsPage.sites, 'Сайты напрямую',
+          s.directSites.isEmpty ? 'Свои сайты и адреса без туннеля' : '${s.directSites.length}: ${s.directSites.take(3).join(', ')}'),
       (SettingsPage.safe, 'Безопасность', 'DNS ${dnsMeta[s.dns]} и скрытие слабых узлов'),
       (SettingsPage.probe, 'Проверка узлов', probeMeta[s.probe]!.$1),
       (SettingsPage.services, 'Проверка сервисов',
@@ -726,6 +731,105 @@ class _LinkPageState extends State<_LinkPage> with WidgetsBindingObserver {
           control: Icon(Icons.open_in_new_rounded, color: p.muted),
           onTap: Native.openVpnSettings,
         ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SitesPage extends StatefulWidget {
+  const _SitesPage({required this.s});
+  final AppState s;
+
+  @override
+  State<_SitesPage> createState() => _SitesPageState();
+}
+
+class _SitesPageState extends State<_SitesPage> {
+  final _text = TextEditingController();
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  void _add() {
+    if (_text.text.trim().isEmpty) return;
+    final msg = widget.s.addDirectSites(_text.text);
+    widget.s.flash(msg);
+    if (msg.startsWith('Добавлено') || msg == 'Уже в списке') _text.clear();
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final p = PaletteScope.of(context);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        Text(
+          'Эти сайты и адреса открываются напрямую, мимо узла — со своего IP. Поддомены входят: '
+          'vk.com — это и m.vk.com, и api.vk.com. Можно вставить ссылку целиком, адрес (1.2.3.4) или подсеть (10.0.0.0/8).',
+          style: p.text(14, color: p.muted),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _text,
+          minLines: 1,
+          maxLines: 4,
+          style: p.text(14),
+          keyboardType: TextInputType.url,
+          onSubmitted: (_) => _add(),
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: 'example.ru, https://site.com/page, 1.2.3.4',
+            hintStyle: p.text(14, color: p.muted),
+            filled: true,
+            fillColor: p.surface,
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: p.border)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: p.accent)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        PillButton(label: 'Добавить', primary: true, icon: Icons.add_rounded, onTap: _add),
+        const SizedBox(height: 16),
+        if (s.directSites.isEmpty)
+          Text('Список пуст.', style: p.text(14, color: p.muted))
+        else
+          for (final site in s.directSites)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Icon(XrayConfig.isIpOrCidr(site) ? Icons.lan_outlined : Icons.public_rounded, size: 18, color: p.muted),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(site, style: p.text(15))),
+                  IconButton(
+                    tooltip: 'Убрать $site',
+                    icon: Icon(Icons.close_rounded, size: 18, color: p.muted),
+                    onPressed: () {
+                      s.removeDirectSite(site);
+                      setState(() {});
+                    },
+                  ),
+                ],
+              ),
+            ),
+        const SizedBox(height: 12),
+        Text(
+          s.directRu
+              ? 'Российские сайты (банки, Госуслуги, Яндекс, VK) и так идут напрямую — это переключатель «Свои сервисы напрямую» на главном экране.'
+              : 'Переключатель «Свои сервисы напрямую» выключен — российские сайты идут через узел, кроме тех, что в этом списке.',
+          style: p.text(13, color: p.muted),
+        ),
+        if (Native.win) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Работает в обоих режимах: и в «системном прокси», и в TUN. Изменения применяются сразу, если VPN включён.',
+            style: p.text(13, color: p.muted),
+          ),
         ],
       ],
     );
