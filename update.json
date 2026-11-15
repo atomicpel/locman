@@ -1,17 +1,15 @@
 {
- "versionCode": 10903,
- "versionName": "1.9.3",
- "published": "2026-11-14",
+ "versionCode": 10904,
+ "versionName": "1.9.4",
+ "published": "2026-11-15",
  "notes": [
-  "Ядро Xray обновлено до v26.11.9: по умолчанию отпечаток Chrome 155+, который фильтры пока не распознают, и исправления",
-  "TUN-мост обновлён до 2.20.0: исправлены утечки и зависание сессий",
-  "Обновления для телефона теперь выходят отдельно от Windows: уведомление приходит, только когда изменилось само приложение для Android"
+  "«Сайты напрямую» (Ещё → Сайты напрямую): свои сайты, адреса и подсети, которые открываются мимо узла, со своего IP. Поддомены входят сами, можно вставить ссылку целиком. Дополняет «Мимо узла» для приложений"
  ],
  "assets": {
   "arm64-v8a": {
-   "url": "https://github.com/atomicpel/locman/releases/download/android-v1.9.3/Locman-1.9.3-arm64-v8a.apk",
-   "sha256": "b4df6b1c0eded505287a1a28c3c73e885c77ed7e2cd9d65738351a7d9b054cf0",
-   "size": 28582924
+   "url": "https://github.com/atomicpel/locman/releases/download/android-v1.9.4/Locman-1.9.4-arm64-v8a.apk",
+   "sha256": "753fda43231d2fe1ffb2cc44ba1ac2e16280af12f0ea5b8a75aa0a723fb3d427",
+   "size": 28593717
   },
   "windows-x64": {
    "url": "https://github.com/atomicpel/locman/releases/download/windows-v1.9.4/Locman-1.9.4-windows-x64-setup.exe",
