@@ -236,6 +236,17 @@ void DeleteValue(HKEY root, const wchar_t* path, const wchar_t* name) {
 }
 
 bool SetProxy(bool enable, const std::wstring& server, const std::wstring& bypass) {
+  if (!enable) {
+    // Не отключаем прокси, если пользователь или другая программа заменили его,
+    // пока «Лоцман» был подключён.
+    const std::wstring ours = ReadString(HKEY_CURRENT_USER, kOwnKey, L"ProxyServer");
+    const std::wstring current = ReadString(HKEY_CURRENT_USER, kInternetSettings, L"ProxyServer");
+    if (ours.empty() || current != ours) {
+      DeleteValue(HKEY_CURRENT_USER, kOwnKey, L"ProxyServer");
+      return true;
+    }
+  }
+
   HKEY key = nullptr;
   if (RegOpenKeyExW(HKEY_CURRENT_USER, kInternetSettings, 0, KEY_SET_VALUE, &key) != ERROR_SUCCESS) return false;
   const DWORD on = enable ? 1 : 0;
