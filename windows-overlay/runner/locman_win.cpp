@@ -54,7 +54,7 @@ std::map<int, HANDLE> g_procs;
 std::wstring Widen(const std::string& s) {
   if (s.empty()) return std::wstring();
   const int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
-  std::wstring w(static_cast<size_t>(n), L'\0');
+  std::wstring w(static_cast<size_t>(n), L'\\0');
   MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), w.data(), n);
   return w;
 }
@@ -62,7 +62,7 @@ std::wstring Widen(const std::string& s) {
 std::string Narrow(const std::wstring& w) {
   if (w.empty()) return std::string();
   const int n = WideCharToMultiByte(CP_UTF8, 0, w.data(), static_cast<int>(w.size()), nullptr, 0, nullptr, nullptr);
-  std::string s(static_cast<size_t>(n), '\0');
+  std::string s(static_cast<size_t>(n), '\\0');
   WideCharToMultiByte(CP_UTF8, 0, w.data(), static_cast<int>(w.size()), s.data(), n, nullptr, nullptr);
   return s;
 }
@@ -78,7 +78,7 @@ std::vector<std::wstring> CommandArgs() {
 }
 
 std::wstring ExePath() {
-  std::wstring path(MAX_PATH, L'\0');
+  std::wstring path(MAX_PATH, L'\\0');
   for (;;) {
     const DWORD n = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
     if (n < path.size()) {
@@ -169,7 +169,7 @@ void TrayMenu() {
               g_connected ? L"Отключить"            // Отключить
                           : L"Подключить");  // Подключить
   if (g_connected) {
-    AppendMenuW(menu, MF_STRING, 4, L"\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u0443\u0437\u0435\u043b");  // Переключить узел
+    AppendMenuW(menu, MF_STRING, 4, L"\\u041f\\u0435\\u0440\\u0435\\u043a\\u043b\\u044e\\u0447\\u0438\\u0442\\u044c \\u0443\\u0437\\u0435\\u043b");  // Переключить узел
   }
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(menu, MF_STRING, 3, L"Выход");  // Выход
@@ -236,6 +236,17 @@ void DeleteValue(HKEY root, const wchar_t* path, const wchar_t* name) {
 }
 
 bool SetProxy(bool enable, const std::wstring& server, const std::wstring& bypass) {
+  if (!enable) {
+    // Не отключаем прокси, если пользователь или другая программа заменили его,
+    // пока «Лоцман» был подключён.
+    const std::wstring ours = ReadString(HKEY_CURRENT_USER, kOwnKey, L"ProxyServer");
+    const std::wstring current = ReadString(HKEY_CURRENT_USER, kInternetSettings, L"ProxyServer");
+    if (ours.empty() || current != ours) {
+      DeleteValue(HKEY_CURRENT_USER, kOwnKey, L"ProxyServer");
+      return true;
+    }
+  }
+
   HKEY key = nullptr;
   if (RegOpenKeyExW(HKEY_CURRENT_USER, kInternetSettings, 0, KEY_SET_VALUE, &key) != ERROR_SUCCESS) return false;
   const DWORD on = enable ? 1 : 0;
@@ -274,7 +285,7 @@ void ResetStaleProxy() {
 int StartProcess(const std::wstring& exe, const std::wstring& args, const std::wstring& cwd) {
   std::wstring cmd = L"\"" + exe + L"\" " + args;
   std::vector<wchar_t> buf(cmd.begin(), cmd.end());
-  buf.push_back(L'\0');
+  buf.push_back(L'\\0');
   STARTUPINFOW si{};
   si.cb = sizeof(si);
   PROCESS_INFORMATION pi{};
@@ -350,7 +361,7 @@ bool RelaunchAdmin() {
 bool RunHidden(const std::wstring& exe, const std::wstring& args) {
   std::wstring cmd = L"\"" + exe + L"\" " + args;
   std::vector<wchar_t> buf(cmd.begin(), cmd.end());
-  buf.push_back(L'\0');
+  buf.push_back(L'\\0');
   STARTUPINFOW si{};
   si.cb = sizeof(si);
   PROCESS_INFORMATION pi{};
@@ -368,7 +379,7 @@ bool RunHidden(const std::wstring& exe, const std::wstring& args) {
 std::wstring SystemExe(const wchar_t* name) {
   wchar_t dir[MAX_PATH] = {};
   GetSystemDirectoryW(dir, MAX_PATH);
-  return std::wstring(dir) + L"\\" + name;
+  return std::wstring(dir) + L"\\\\" + name;
 }
 
 std::wstring XmlEscape(const std::wstring& s) {
@@ -397,19 +408,19 @@ bool CreateElevatedTask(const std::wstring& exe) {
   wchar_t domain[256] = {};
   GetEnvironmentVariableW(L"USERNAME", user, 256);
   GetEnvironmentVariableW(L"USERDOMAIN", domain, 256);
-  const std::wstring account = std::wstring(domain) + L"\\" + user;
+  const std::wstring account = std::wstring(domain) + L"\\\\" + user;
   const std::wstring xml =
-      L"<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n"
-      L"<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n"
-      L"<Triggers><LogonTrigger><Enabled>true</Enabled><UserId>" + XmlEscape(account) + L"</UserId></LogonTrigger></Triggers>\r\n"
+      L"<?xml version=\"1.0\" encoding=\"UTF-16\"?>\\r\\n"
+      L"<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\\r\\n"
+      L"<Triggers><LogonTrigger><Enabled>true</Enabled><UserId>" + XmlEscape(account) + L"</UserId></LogonTrigger></Triggers>\\r\\n"
       L"<Principals><Principal id=\"Author\"><UserId>" + XmlEscape(account) +
-      L"</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals>\r\n"
+      L"</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals>\\r\\n"
       L"<Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>"
       L"<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>"
-      L"<ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Enabled>true</Enabled></Settings>\r\n"
+      L"<ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Enabled>true</Enabled></Settings>\\r\\n"
       L"<Actions Context=\"Author\"><Exec><Command>" + XmlEscape(exe) +
-      L"</Command><Arguments>--autostart</Arguments></Exec></Actions>\r\n"
-      L"</Task>\r\n";
+      L"</Command><Arguments>--autostart</Arguments></Exec></Actions>\\r\\n"
+      L"</Task>\\r\\n";
   wchar_t tmp[MAX_PATH] = {};
   GetTempPathW(MAX_PATH, tmp);
   const std::wstring file = std::wstring(tmp) + L"locman-task.xml";
@@ -551,9 +562,9 @@ void HandleCall(const flutter::MethodCall<flutter::EncodableValue>& call,
     // Окно «Сохранить как» / «Открыть» для резервной копии; вернём путь или ничего.
     const bool save = Bool(a, "save", false);
     std::wstring path = Widen(Str(a, "name"));
-    std::vector<wchar_t> buf(32768, L'\0');
+    std::vector<wchar_t> buf(32768, L'\\0');
     if (!path.empty() && path.size() < buf.size()) std::copy(path.begin(), path.end(), buf.begin());
-    static const wchar_t kFilter[] = L"JSON\0*.json\0*.*\0*.*\0\0";
+    static const wchar_t kFilter[] = L"JSON\\0*.json\\0*.*\\0*.*\\0\\0";
     OPENFILENAMEW ofn{};
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = g_hwnd;
