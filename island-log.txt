@@ -1,0 +1,25 @@
+SMOKE: start xray=Lib v40, Xray-core v26.11.9 version=0.0.102 tun=hev fragment=true
+SMOKE: log Источники обновлены
+SMOKE: sources zieng2-universal=145 rjsxrd-bypass=552 igareck-white-mobile=150 igareck-white-cidr=16 rkp-wl=29 kfwl-wl=11 bunker-wl=14 igareck-black-vless=1208 igareck-black-mobile=150 igareck-black-ss=170 kort-ru-sni=814 rkp-bl=193 kfwl-bl=89 found-bd706432a1=452 found-ceb0c9f14d=30 found-03d643147f=53 found-7579aacf78=30 found-fb3e1efcb1=2381 found-01abb8127c=1018
+SMOKE: nodes 5193
+SMOKE: shot home-off
+SMOKE: beat 1 phase=off step=0 checking=0
+SMOKE: log Прокладываем ход
+SMOKE: log Быстрое подключение: Германия — через него недавно шли данные
+SMOKE: bring 169.58.215.154 tun=hev
+SMOKE: beat 2 phase=seek step=5 checking=0
+SMOKE: beat 3 phase=seek step=5 checking=0
+SMOKE: log Германия · VLESS · 124 мс · ЧС
+SMOKE: connected Германия VLESS/WS kind=black
+SMOKE: beat 4 phase=on step=0 checking=0
+SMOKE: probe true noFrag=0
+SMOKE: ip tunnel=104.28.162.107 direct=9.234.14.232
+SMOKE: log Адрес: 104.28.162.59 · Драйайх, Гессен, Германия · Cloudflare Inc.
+SMOKE: shot home-on
+SMOKE: shot nodes
+SMOKE: shot sources
+SMOKE: shot about
+SMOKE: shot home-final
+SMOKE: traffic down=1593961 up=30649
+SMOKE: log Отключено · Германия
+SMOKE: done

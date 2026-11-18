@@ -1,0 +1,24 @@
+SMOKE: start xray=Lib v40, Xray-core v26.11.9 version=0.0.102 tun=xray fragment=true
+SMOKE: log Источники обновлены
+SMOKE: sources zieng2-universal=145 rjsxrd-bypass=552 igareck-white-mobile=150 igareck-white-cidr=16 rkp-wl=29 kfwl-wl=10 bunker-wl=14 igareck-black-vless=1208 igareck-black-mobile=150 igareck-black-ss=170 kort-ru-sni=814 rkp-bl=193 kfwl-bl=89 found-bd706432a1=452 found-ceb0c9f14d=30 found-03d643147f=53 found-7579aacf78=30 found-fb3e1efcb1=2381 found-01abb8127c=1018
+SMOKE: nodes 5192
+SMOKE: beat 1 phase=off step=0 checking=0
+SMOKE: shot home-off
+SMOKE: log Прокладываем ход
+SMOKE: seek pool=16
+SMOKE: beat 2 phase=seek step=3 checking=0
+SMOKE: bring 162.249.125.133 tun=xray
+SMOKE: log Румыния · Hy2 · 166 мс · ЧС
+SMOKE: connected Румыния Hy2/QUIC kind=black
+SMOKE: beat 3 phase=on step=0 checking=0
+SMOKE: probe true noFrag=0
+SMOKE: ip tunnel=162.249.125.133 direct=9.234.14.232
+SMOKE: log Адрес: 162.249.125.133 · Янку-Жиану, Олт, Румыния · INTERKVM HOST SRL
+SMOKE: shot home-on
+SMOKE: shot nodes
+SMOKE: shot sources
+SMOKE: shot about
+SMOKE: shot home-final
+SMOKE: traffic down=37359053 up=326662
+SMOKE: log Отключено · Румыния
+SMOKE: done
