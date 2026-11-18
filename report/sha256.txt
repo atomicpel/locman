@@ -1,0 +1,2 @@
+29c4b9b80d238004a670d3f4cf48a133bda7db0674930afacc7ba9e97b570a34 *Locman-0.0.102-windows-x64-portable.zip
+5d64184bcf5e9ee8a9bb2a774f02bac519ef40cefef264765a2dd81af6fc44ec *Locman-0.0.102-windows-x64-setup.exe
