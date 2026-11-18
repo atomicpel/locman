@@ -1,0 +1,5 @@
+6030296 lib/arm64-v8a/libapp.so
+11346352 lib/arm64-v8a/libflutter.so
+33842544 lib/arm64-v8a/libgojni.so
+356664 lib/arm64-v8a/libhev-socks5-tunnel.so
+28944 lib/arm64-v8a/libimage_processing_util_jni.so

@@ -1,0 +1,4 @@
+V3.0 Signer: certificate DN: CN=Locman, O=atomicpel
+V3.0 Signer: certificate SHA-256 digest: e6cb05a7b1cc2418418a565da71038617083e8597846922bfbe7fa671ed3a40f
+V3.0 Signer: certificate SHA-1 digest: 32cd236a349e3e9858f2cd70252c0674fbd3c0f5
+V3.0 Signer: certificate MD5 digest: d9307c2e595a04cdbf1c9f47744f36af
