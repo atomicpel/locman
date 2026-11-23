@@ -124,7 +124,7 @@ Future<void> showNodeSheet(BuildContext context, AppState s, ProxyNode node) => 
           }),
           _sheetButton(p, Icons.power_settings_new_rounded, 'Идти через этот узел', () {
             Navigator.pop(ctx);
-            s.connect(nodeId: node.id);
+            s.connect(nodeId: node.id, manual: true);
           }),
           if (s.isBanned(node))
             _sheetButton(p, Icons.undo_rounded, 'Убрать из чёрного списка', () {

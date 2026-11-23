@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import 'core/b64.dart';
 import 'core/catalog.dart';
+import 'core/geo.dart';
 import 'core/node.dart';
 import 'core/routes.dart';
 import 'core/ru.dart';
@@ -285,6 +286,14 @@ class AppState extends ChangeNotifier {
 
   /// При автопереключении оставаться в стране текущего узла (для ТикТока и т. п.).
   bool sameCountry = false;
+
+  /// Закреплённая страна, подтверждённая по реальному IP выхода.
+  /// null означает, что фактическая страна ещё не определена.
+  String? lockCountry;
+
+  /// Страны выхода узлов по факту (ISO-код), полученные после подключения.
+  /// Значение по IP приоритетнее страны, угаданной по имени узла.
+  Map<String, String> exitCountries = {};
 
   /// Адрес проверки узлов (ключ из [testUrls]).
   String testKey = 'google';
@@ -646,6 +655,12 @@ class AppState extends ChangeNotifier {
     modeNodes = Map<String, String>.from((j['modeNodes'] as Map?) ?? const {});
     modeNodesOn = j['modeNodesOn'] != false;
     sameCountry = j['sameCountry'] == true;
+    lockCountry = Place.normalizeCode(j['lockCountry']?.toString());
+    exitCountries = {
+      for (final e in ((j['exitCountries'] as Map?) ?? const {}).entries)
+        if (Place.normalizeCode(e.value?.toString()) != null)
+          e.key.toString(): Place.normalizeCode(e.value?.toString())!,
+    };
     testKey = testUrls.containsKey(j['testKey']) ? j['testKey'] as String : 'google';
     hwid = (j['hwid'] as String?) ?? '';
     seenVersion = j['seenVersion'] as String?;
@@ -720,6 +735,8 @@ class AppState extends ChangeNotifier {
         'modeNodes': modeNodes,
         'modeNodesOn': modeNodesOn,
         'sameCountry': sameCountry,
+        if (lockCountry != null) 'lockCountry': lockCountry,
+        'exitCountries': {for (final e in exitCountries.entries.toList().reversed.take(800)) e.key: e.value},
         'testKey': testKey,
         'hwid': hwid,
         'seenVersion': seenVersion,
@@ -997,9 +1014,19 @@ class AppState extends ChangeNotifier {
   }
 
   void setSameCountry(bool v) {
-    _set(() => sameCountry = v);
+    _set(() {
+      sameCountry = v;
+      if (!v) {
+        lockCountry = null;
+      } else {
+        final id = activeId ?? lastNodeId;
+        lockCountry = id == null ? null : Place.normalizeCode(exitCountries[id]);
+      }
+    });
     log(v ? 'При переключении оставаться в той же стране' : 'При переключении — любая страна');
     _pushBackups();
+    // Если режим включили на уже поднятом туннеле, узнаём фактическую страну сейчас.
+    if (v && lockCountry == null && phase == Phase.on) unawaited(refreshIp());
   }
 
   void setModeNodesOn(bool v) {
@@ -1122,6 +1149,8 @@ class AppState extends ChangeNotifier {
       pickFrom = 'all';
       countries = 'all';
       sameCountry = false;
+      lockCountry = null;
+      exitCountries.clear();
       modeNodesOn = true;
       modeNodes.clear();
       profiles.clear();
@@ -2587,9 +2616,12 @@ class AppState extends ChangeNotifier {
     ipError = null;
     notifyListeners();
     try {
+      final checkedNodeId = activeId;
       final info = await Net.whoAmI();
-      if (phase == Phase.on) {
+      // Не приписываем ответ старого запроса новому узлу после быстрого переключения.
+      if (phase == Phase.on && activeId == checkedNodeId) {
         ipInfo = info;
+        _noteExitCountry(info);
         log('Адрес: ${info.ip}${info.place.isEmpty ? '' : ' · ${info.place}'}${info.provider == null ? '' : ' · ${info.provider}'}');
       }
     } catch (e) {
@@ -2629,13 +2661,15 @@ class AppState extends ChangeNotifier {
   List<ProxyNode> _candidates(NetKind? kind) {
     final fits = <ProxyNode>[];
     final seen = <String>{};
+    final lockedCountry = _stickCountry;
     for (final s in allSources) {
       if (!isEnabled(s) || !s.fits(kind)) continue;
       for (final n in nodesBySource[s.id] ?? const <ProxyNode>[]) {
         if (hideInsecure && n.isInsecure) continue;
         if (pickFrom == 'reality' && !n.isReality) continue;
         if (banned.isNotEmpty && isBanned(n)) continue;
-        if (countries == 'noRu' && n.place.code == 'RU') continue;
+        if (countries == 'noRu' && _countryOf(n) == 'RU') continue;
+        if (lockedCountry != null && _countryOf(n) != lockedCountry) continue;
         if (isDead(n.id)) continue;
         if (isResting(n.id)) continue;
         if (!seen.add(n.endpointKey)) continue;
@@ -2651,11 +2685,9 @@ class AppState extends ChangeNotifier {
     final all = [...proven, ...known, ...rest];
     // Вид соединения, который провайдер сейчас режет (в этом поиске или замерзал за
     // последние 15 минут), — в конец: обычно режут вид целиком, и вперёд выходят
-    // другие транспорты (XHTTP, gRPC, WebSocket, Hysteria2). С «той же страной» узлы
-    // этой страны — вперёд.
-    final country = _stickCountry;
-    int rank(ProxyNode n) =>
-        (failedKinds.contains(n.kind) || _kindFreezing(n.kind) ? 2 : 0) + (country != null && n.place.code != country ? 1 : 0);
+    // другие транспорты (XHTTP, gRPC, WebSocket, Hysteria2). Страна уже строго
+    // отфильтрована выше, если Country Lock закреплён.
+    int rank(ProxyNode n) => failedKinds.contains(n.kind) || _kindFreezing(n.kind) ? 2 : 0;
     return mergeSortStable(all, (a, b) => rank(a).compareTo(rank(b)));
   }
 
@@ -2681,13 +2713,46 @@ class AppState extends ChangeNotifier {
   /// Виды соединений, через которые в этом поиске не пошли данные.
   final Set<String> failedKinds = {};
 
-  /// Страна, в которой оставаться при переключении (если включено).
+  /// Страна, в которой оставаться при переключении (только подтверждённая по IP).
   String? get _stickCountry {
     if (!sameCountry) return null;
-    return nodeById(activeId ?? lastNodeId)?.place.code;
+    final id = activeId ?? lastNodeId;
+    return lockCountry ?? _countryOf(id == null ? null : nodeById(id));
   }
 
-  Future<void> connect({bool ignorePin = false, String? nodeId, bool force = false, String? avoid}) async {
+  /// Страна узла: подтверждённая по IP, а для ещё не проверенных — угаданная по имени.
+  String? _countryOf(ProxyNode? n) => n == null ? null : (exitCountries[n.id] ?? n.place.code);
+
+  /// Сохраняет фактическую страну выхода и предупреждает о несовпадении с закреплением.
+  void _noteExitCountry(IpInfo info) {
+    final code = Place.normalizeCode(info.code);
+    final n = nodeById(activeId);
+    if (code == null || n == null) return;
+
+    final previous = exitCountries[n.id];
+    exitCountries.remove(n.id);
+    exitCountries[n.id] = code;
+
+    final byName = n.place.code;
+    if (previous != code && byName != null && byName != code) {
+      log('Страна узла по имени — ${Place.countryName(byName)}, по факту — ${Place.countryName(code)}; верим факту');
+    }
+
+    if (sameCountry) {
+      final locked = lockCountry;
+      if (locked == null) {
+        lockCountry = code;
+        log('Страна закреплена: ${Place.countryName(code)}');
+      } else if (locked != code && previous != code) {
+        log('Узел вышел в стране ${Place.countryName(code)}, а закреплена ${Place.countryName(locked)}');
+        flash('Страна выхода не совпала с закреплённой');
+      }
+    }
+    _save();
+    _pushBackups();
+  }
+
+  Future<void> connect({bool ignorePin = false, String? nodeId, bool force = false, String? avoid, bool manual = false}) async {
     // Уже подключены к этому узлу — ядро не перезапускаем.
     if (!force && nodeId != null && nodeId == activeId && phase == Phase.on) {
       flash('Уже подключены к этому узлу');
@@ -2696,6 +2761,12 @@ class AppState extends ChangeNotifier {
     final token = ++_seekGen;
     bool cancelled() => token != _seekGen;
     stopHunt();
+    // Явный выбор пользователя начинает новое закрепление по фактической стране узла.
+    if (manual) {
+      lockCountry = null;
+      // Не используем старую GeoIP-страну этого узла до повторной проверки после подключения.
+      if (sameCountry && nodeId != null) exitCountries.remove(nodeId);
+    }
 
     if (!allSources.any(isEnabled)) {
       _fail('Нет включённых источников');
@@ -2755,6 +2826,12 @@ class AppState extends ChangeNotifier {
         chosen = m;
         log('Узел для ${kind == NetKind.white ? 'белых списков' : 'обычных блокировок'}: ${m.title}');
       }
+    }
+
+    // Закреплённая страна также ограничивает быстрый путь: он не должен обходить Country Lock.
+    if (chosen != null && !userPick && _stickCountry != null && _countryOf(chosen) != _stickCountry) {
+      log('Закреплённая страна не совпадает с выбранным резервным узлом — ищем узел в нужной стране');
+      chosen = null;
     }
 
     // Быстрый путь: узлы, через которые недавно реально шли данные, — короткая проверка
@@ -2887,10 +2964,10 @@ class AppState extends ChangeNotifier {
   /// Запасные узлы для сторожа в службе: свежие живые, кроме текущего, лучшие по задержке.
   /// Конфиги собираются с теми же локальными входами, что у поднятого туннеля.
   List<Map<String, String>> _backups(ProxyNode current, LocalProxy local) {
-    // С «той же страной» сторож переключается только на узлы страны текущего.
-    final country = sameCountry ? current.place.code : null;
+    // Резервируемся только в подтверждённой стране выхода.
+    final country = _stickCountry;
     final list = _candidates(_kindForMode())
-        .where((n) => n.id != current.id && latencyOf(n.id) > 0 && (country == null || n.place.code == country))
+        .where((n) => n.id != current.id && latencyOf(n.id) > 0 && (country == null || _countryOf(n) == country))
         .toList()
       // Сначала из той же подписки (там обычно те же условия), потом остальные — по задержке.
       ..sort((a, b) {

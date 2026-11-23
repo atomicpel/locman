@@ -55,6 +55,15 @@ class Place {
   }
 
   static String countryName(String code) => _byCode[code]?.ru ?? code;
+
+  /// Нормализует код страны из GeoIP: две латинские буквы, UK → GB.
+  /// Пустые и служебные значения GeoIP не считаются страной.
+  static String? normalizeCode(String? raw) {
+    final code = raw?.trim().toUpperCase();
+    if (code == null || !RegExp(r'^[A-Z]{2}$').hasMatch(code)) return null;
+    if (code == 'XX' || code == 'ZZ') return null;
+    return code == 'UK' ? 'GB' : code;
+  }
 }
 
 class _Country {

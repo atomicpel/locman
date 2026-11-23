@@ -3,7 +3,12 @@ name: Сборка
 on:
   push:
     # Выпуск: ветка release/<android|windows|win7>/vX.Y.Z — собирается и выпускается только эта платформа.
-    branches: [main, 'release/*/v*']
+    branches: [main, 'release/*/v*', 'ci/*']
+    paths-ignore:
+      - '**.md'
+      - 'catalog/**'
+  pull_request:
+    branches: [main]
     paths-ignore:
       - '**.md'
       - 'catalog/**'
