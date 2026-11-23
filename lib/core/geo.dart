@@ -56,6 +56,17 @@ class Place {
 
   static String countryName(String code) => _byCode[code]?.ru ?? code;
 
+/// Returns only a verified country for Country Lock.
+/// Node names are deliberately excluded because they may not match the exit IP.
+String? confirmedCountryLock({
+  required bool enabled,
+  String? locked,
+  String? activeExit,
+}) {
+  if (!enabled) return null;
+  return Place.normalizeCode(locked) ?? Place.normalizeCode(activeExit);
+}
+
   /// Нормализует код страны из GeoIP: две латинские буквы, UK → GB.
   /// Пустые и служебные значения GeoIP не считаются страной.
   static String? normalizeCode(String? raw) {
