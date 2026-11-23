@@ -2762,7 +2762,11 @@ class AppState extends ChangeNotifier {
     bool cancelled() => token != _seekGen;
     stopHunt();
     // Явный выбор пользователя начинает новое закрепление по фактической стране узла.
-    if (manual) lockCountry = null;
+    if (manual) {
+      lockCountry = null;
+      // Не используем старую GeoIP-страну этого узла до повторной проверки после подключения.
+      if (sameCountry && nodeId != null) exitCountries.remove(nodeId);
+    }
 
     if (!allSources.any(isEnabled)) {
       _fail('Нет включённых источников');
