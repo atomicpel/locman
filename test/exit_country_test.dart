@@ -22,4 +22,26 @@ void main() {
       expect(Place.normalizeCode('D1'), isNull);
     });
   });
+
+  group('confirmed country lock', () {
+    test('does not infer a lock from an unverified node name', () {
+      expect(confirmedCountryLock(enabled: true, locked: null, activeExit: null), isNull);
+    });
+
+    test('uses the explicit lock before the active exit observation', () {
+      expect(
+        confirmedCountryLock(enabled: true, locked: ' de ', activeExit: 'NL'),
+        'DE',
+      );
+    });
+
+    test('uses only a normalized, confirmed active exit when no lock exists', () {
+      expect(confirmedCountryLock(enabled: true, locked: null, activeExit: ' nl '), 'NL');
+      expect(confirmedCountryLock(enabled: true, locked: null, activeExit: 'unknown'), isNull);
+    });
+
+    test('does not constrain routing when the feature is disabled', () {
+      expect(confirmedCountryLock(enabled: false, locked: 'DE', activeExit: 'NL'), isNull);
+    });
+  });
 }

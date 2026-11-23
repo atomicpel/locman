@@ -2716,8 +2716,14 @@ class AppState extends ChangeNotifier {
   /// Страна, в которой оставаться при переключении (только подтверждённая по IP).
   String? get _stickCountry {
     if (!sameCountry) return null;
-    final id = activeId ?? lastNodeId;
-    return lockCountry ?? _countryOf(id == null ? null : nodeById(id));
+    // Country Lock must be based on an observed exit IP, never on a node label.
+    // Before GeoIP confirms the active tunnel, leave the country unconstrained.
+    final id = activeId;
+    return confirmedCountryLock(
+      enabled: true,
+      locked: lockCountry,
+      activeExit: id == null ? null : exitCountries[id],
+    );
   }
 
   /// Страна узла: подтверждённая по IP, а для ещё не проверенных — угаданная по имени.
