@@ -2717,7 +2717,7 @@ class AppState extends ChangeNotifier {
   String? get _stickCountry {
     if (!sameCountry) return null;
     final id = activeId ?? lastNodeId;
-    return lockCountry ?? (id == null ? null : Place.normalizeCode(exitCountries[id]));
+    return lockCountry ?? _countryOf(id == null ? null : nodeById(id));
   }
 
   /// Страна узла: подтверждённая по IP, а для ещё не проверенных — угаданная по имени.
