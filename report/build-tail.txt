@@ -1,0 +1,2 @@
+Building Windows application...                                    62.0s
+√ Built build\windows\x64\runner\Release\locman.exe
