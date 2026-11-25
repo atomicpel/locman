@@ -16,6 +16,9 @@ import os
 import pathlib
 import re
 import sys
+import time
+import email.utils
+import urllib.error
 import urllib.request
 
 DRY = "--dry-run" in sys.argv
@@ -31,13 +34,55 @@ LABEL = "обновление-ядра"
 
 
 def api(path, data=None):
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "locman-deps"}
+    """GitHub API. Повторяем только безопасные GET-запросы при временных сбоях."""
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "locman-deps",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
     if TOKEN:
         headers["Authorization"] = f"Bearer {TOKEN}"
     body = json.dumps(data).encode() if data is not None else None
     req = urllib.request.Request("https://api.github.com/" + path, data=body, headers=headers)
-    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
-        return json.load(resp)
+    retryable = data is None
+    delays = (2, 5, 10, 20)
+    for attempt in range(len(delays) + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+                return json.load(resp)
+        except urllib.error.HTTPError as exc:
+            retry = retryable and (exc.code == 429 or 500 <= exc.code <= 599)
+            if not retry or attempt >= len(delays):
+                raise
+            retry_after = exc.headers.get("Retry-After")
+            wait = delays[attempt]
+            if retry_after:
+                try:
+                    wait = max(wait, int(retry_after))
+                except ValueError:
+                    try:
+                        retry_at = email.utils.parsedate_to_datetime(retry_after)
+                        wait = max(wait, int(retry_at.timestamp() - time.time()))
+                    except (TypeError, ValueError, OverflowError):
+                        pass
+            wait = min(max(wait, 1), 120)
+            print(
+                f"GitHub API временно недоступен (HTTP {exc.code}), "
+                f"повтор {attempt + 1}/{len(delays)} через {wait} сек.: {path}",
+                file=sys.stderr,
+            )
+            time.sleep(wait)
+        except (urllib.error.URLError, TimeoutError) as exc:
+            if not retryable or attempt >= len(delays):
+                raise
+            wait = delays[attempt]
+            print(
+                f"Сетевая ошибка GitHub API ({exc}), "
+                f"повтор {attempt + 1}/{len(delays)} через {wait} сек.: {path}",
+                file=sys.stderr,
+            )
+            time.sleep(wait)
+    raise RuntimeError(f"GitHub API: исчерпаны попытки запроса {path}")
 
 
 def sha256_of(url):
