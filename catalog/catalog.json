@@ -1,6 +1,6 @@
 {
  "version": 1,
- "generatedAt": "2026-11-24T22:32:17+00:00",
+ "generatedAt": "2026-11-25T08:45:20+00:00",
  "sources": [
   {
    "id": "zieng2-universal",
@@ -20,15 +20,15 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 97,
-   "secure": 97,
+   "nodes": 116,
+   "secure": 116,
    "protocols": {
-    "vless": 97
+    "vless": 116
    },
-   "alive": 1.0,
-   "hash": "1e23c153b9ddf397",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.97,
+   "hash": "a8aea504702da97c",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -47,19 +47,19 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 577,
-   "secure": 577,
+   "nodes": 661,
+   "secure": 661,
    "protocols": {
-    "ss": 37,
-    "hysteria2": 18,
-    "vless": 508,
-    "vmess": 10,
-    "trojan": 4
+    "ss": 22,
+    "hysteria2": 13,
+    "vless": 617,
+    "vmess": 7,
+    "trojan": 2
    },
-   "alive": 0.9,
-   "hash": "797ccb28f95cfe0f",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.93,
+   "hash": "1ba812646d990fc4",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -79,15 +79,15 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 101,
-   "secure": 101,
+   "nodes": 91,
+   "secure": 91,
    "protocols": {
-    "vless": 101
+    "vless": 91
    },
-   "alive": 0.9,
-   "hash": "d82da69b17ba8fd0",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 1.0,
+   "hash": "9b21da3a3893aac5",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -107,15 +107,15 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 7,
-   "secure": 7,
+   "nodes": 10,
+   "secure": 10,
    "protocols": {
-    "vless": 7
+    "vless": 10
    },
-   "alive": 0.5,
-   "hash": "75f4ad4a72e9641f",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 1.0,
+   "hash": "6ee290117325c313",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -132,19 +132,17 @@
     "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/WHITE-SNI-RU-all.txt"
    ],
    "origin": "curated",
-   "status": "ok",
-   "error": null,
-   "nodes": 6,
-   "secure": 6,
-   "protocols": {
-    "vless": 6
-   },
-   "alive": 1.0,
-   "hash": "9be263c137486f1a",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
-   "failingSince": null,
-   "recommended": true
+   "status": "empty",
+   "error": "почти нет безопасных узлов",
+   "nodes": 0,
+   "secure": 0,
+   "protocols": {},
+   "alive": null,
+   "hash": "7935415b9c17b4b2",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
+   "failingSince": "2026-11-25T08:45:20+00:00",
+   "recommended": false
   },
   {
    "id": "telega-ru-whitelist",
@@ -161,15 +159,15 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 15,
-   "secure": 15,
+   "nodes": 9,
+   "secure": 9,
    "protocols": {
-    "vless": 15
+    "vless": 9
    },
    "alive": 1.0,
-   "hash": "7325e639ff1f9fe2",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "hash": "7a82a23e89c47d6a",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -192,7 +190,7 @@
    "protocols": {},
    "alive": null,
    "hash": null,
-   "checkedAt": "2026-11-24T22:32:17+00:00",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
    "changedAt": "2026-11-20T07:25:48+00:00",
    "failingSince": "2026-11-20T20:28:57+00:00",
    "recommended": true
@@ -216,7 +214,7 @@
    "protocols": {},
    "alive": null,
    "hash": null,
-   "checkedAt": "2026-11-24T22:32:17+00:00",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
    "changedAt": "2026-11-20T07:25:48+00:00",
    "failingSince": "2026-11-20T20:28:57+00:00",
    "recommended": true
@@ -240,7 +238,7 @@
    "protocols": {},
    "alive": null,
    "hash": null,
-   "checkedAt": "2026-11-24T22:32:17+00:00",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
    "changedAt": "2026-11-20T07:25:48+00:00",
    "failingSince": "2026-11-20T20:28:57+00:00",
    "recommended": true
@@ -261,15 +259,15 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 204,
-   "secure": 204,
+   "nodes": 511,
+   "secure": 500,
    "protocols": {
-    "vless": 204
+    "vless": 511
    },
    "alive": 1.0,
-   "hash": "5dcb64291bbd0501",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "hash": "01e0e84ece33578f",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -288,18 +286,16 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 142,
-   "secure": 142,
+   "nodes": 148,
+   "secure": 146,
    "protocols": {
-    "vless": 86,
-    "hysteria2": 4,
-    "vmess": 28,
-    "trojan": 24
+    "vless": 128,
+    "vmess": 20
    },
-   "alive": 1.0,
-   "hash": "97c48741c1902d70",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.97,
+   "hash": "bf87bd9018509ac0",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -318,17 +314,17 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 80,
-   "secure": 72,
+   "nodes": 101,
+   "secure": 84,
    "protocols": {
     "hysteria2": 4,
-    "vmess": 38,
-    "trojan": 38
+    "vmess": 85,
+    "trojan": 12
    },
-   "alive": 0.93,
-   "hash": "2178886d76b8405f",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.97,
+   "hash": "d64742f6b6e22241",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -347,15 +343,15 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 15,
-   "secure": 15,
+   "nodes": 9,
+   "secure": 9,
    "protocols": {
-    "vless": 15
+    "vless": 9
    },
    "alive": 1.0,
-   "hash": "0f1b683bda17ed49",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "hash": "bc41e86d6734209b",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -373,15 +369,15 @@
    "origin": "curated",
    "status": "ok",
    "error": null,
-   "nodes": 474,
-   "secure": 433,
+   "nodes": 439,
+   "secure": 400,
    "protocols": {
-    "vless": 474
+    "vless": 439
    },
    "alive": 1.0,
-   "hash": "86d75edaadb324d9",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "hash": "b88d6942bf89baf0",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -404,7 +400,7 @@
    "protocols": {},
    "alive": null,
    "hash": null,
-   "checkedAt": "2026-11-24T22:32:17+00:00",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
    "changedAt": "2026-11-20T07:25:48+00:00",
    "failingSince": "2026-11-20T20:28:57+00:00",
    "recommended": true
@@ -428,7 +424,7 @@
    "protocols": {},
    "alive": null,
    "hash": null,
-   "checkedAt": "2026-11-24T22:32:17+00:00",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
    "changedAt": "2026-11-18T20:38:41+00:00",
    "failingSince": "2026-11-20T20:28:57+00:00",
    "recommended": true
@@ -452,7 +448,7 @@
    "protocols": {},
    "alive": null,
    "hash": null,
-   "checkedAt": "2026-11-24T22:32:17+00:00",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
    "changedAt": "2026-11-01T17:56:55+00:00",
    "failingSince": "2026-11-20T20:28:57+00:00",
    "recommended": false
@@ -471,17 +467,17 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 200,
-   "secure": 184,
+   "nodes": 192,
+   "secure": 188,
    "protocols": {
-    "vless": 169,
+    "vless": 170,
     "ss": 14,
-    "hysteria2": 17
+    "hysteria2": 8
    },
-   "alive": 0.75,
-   "hash": "33e3a931e909b06d",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.57,
+   "hash": "bc35469dccfbaef0",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -502,15 +498,14 @@
    "nodes": 190,
    "secure": 190,
    "protocols": {
-    "vmess": 7,
-    "ss": 26,
-    "vless": 153,
-    "trojan": 4
+    "vless": 182,
+    "ss": 7,
+    "vmess": 1
    },
-   "alive": 0.97,
-   "hash": "4e4fdaba2db4257a",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 1.0,
+   "hash": "7d6af1ec2e00be2d",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -529,19 +524,19 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 479,
-   "secure": 431,
+   "nodes": 460,
+   "secure": 422,
    "protocols": {
-    "trojan": 38,
-    "vless": 288,
-    "vmess": 72,
-    "ss": 80,
-    "hysteria2": 1
+    "vless": 278,
+    "trojan": 49,
+    "ss": 88,
+    "vmess": 43,
+    "hysteria2": 2
    },
-   "alive": 0.97,
-   "hash": "b8a95fb346d3999f",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 1.0,
+   "hash": "e6958801cf8a3d12",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -560,15 +555,15 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 1089,
-   "secure": 1088,
+   "nodes": 1118,
+   "secure": 1117,
    "protocols": {
-    "vmess": 1089
+    "vmess": 1118
    },
    "alive": 1.0,
-   "hash": "5dc1c2654531ebdc",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "hash": "eb99e45f03a34520",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -589,14 +584,13 @@
    "nodes": 400,
    "secure": 392,
    "protocols": {
-    "vless": 397,
-    "trojan": 2,
-    "ss": 1
+    "vless": 399,
+    "trojan": 1
    },
-   "alive": 0.47,
-   "hash": "a4a0775f4e430280",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.68,
+   "hash": "2a387762242f599d",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -615,21 +609,21 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 466,
-   "secure": 466,
+   "nodes": 446,
+   "secure": 446,
    "protocols": {
-    "vless": 400,
-    "hysteria2": 20,
+    "vless": 381,
+    "hysteria2": 21,
+    "ss": 41,
     "trojan": 1,
-    "vmess": 8,
-    "ss": 37
+    "vmess": 2
    },
-   "alive": 0.95,
-   "hash": "755b1f033d7bc952",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.97,
+   "hash": "2b642a2599408aa1",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
-   "recommended": false
+   "recommended": true
   },
   {
    "id": "found-232058136b",
@@ -645,21 +639,21 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 141,
-   "secure": 141,
+   "nodes": 158,
+   "secure": 158,
    "protocols": {
-    "vless": 105,
-    "ss": 7,
+    "vless": 123,
     "trojan": 25,
     "vmess": 2,
+    "ss": 6,
     "hysteria2": 2
    },
    "alive": 0.97,
-   "hash": "11b49d96058e1502",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "hash": "39ac3bf29b3a00f7",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
-   "recommended": true
+   "recommended": false
   },
   {
    "id": "found-68fbec3474",
@@ -681,10 +675,10 @@
    "protocols": {
     "vless": 587
    },
-   "alive": 0.2,
-   "hash": "5a80c43ba849d5ba",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.17,
+   "hash": "2dcea83fa7c0c549",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -709,9 +703,9 @@
     "vless": 130
    },
    "alive": 0.14,
-   "hash": "ffdb6e905620464d",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "hash": "de34383518348736",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -730,18 +724,18 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 327,
-   "secure": 322,
+   "nodes": 393,
+   "secure": 381,
    "protocols": {
-    "ss": 16,
-    "vless": 265,
-    "vmess": 37,
-    "trojan": 9
+    "vless": 342,
+    "vmess": 28,
+    "trojan": 13,
+    "ss": 10
    },
-   "alive": 0.95,
-   "hash": "0dd0a9b62011ca7b",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.82,
+   "hash": "539ab118a63b3154",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -760,18 +754,18 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 200,
-   "secure": 152,
+   "nodes": 199,
+   "secure": 141,
    "protocols": {
-    "vless": 117,
-    "vmess": 52,
-    "trojan": 8,
-    "ss": 23
+    "vmess": 40,
+    "ss": 35,
+    "vless": 118,
+    "trojan": 6
    },
    "alive": 1.0,
-   "hash": "5ed5ec712128a824",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "hash": "fe50d2b0087dec9d",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -798,7 +792,7 @@
    },
    "alive": 0.92,
    "hash": "3f550264a83e4496",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
    "changedAt": "2026-11-16T06:42:33+00:00",
    "failingSince": null,
    "recommended": false
@@ -826,9 +820,9 @@
     "vmess": 3,
     "trojan": 3
    },
-   "alive": 0.7,
+   "alive": 0.5,
    "hash": "8c88ed46c286d8ab",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
    "changedAt": "2026-11-17T21:00:45+00:00",
    "failingSince": null,
    "recommended": false
@@ -857,9 +851,9 @@
     "vmess": 4,
     "trojan": 2
    },
-   "alive": 0.47,
+   "alive": 0.55,
    "hash": "a61f20b638c1f8c1",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
    "changedAt": "2026-11-17T21:00:45+00:00",
    "failingSince": null,
    "recommended": false
@@ -878,15 +872,17 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 127,
-   "secure": 127,
+   "nodes": 191,
+   "secure": 187,
    "protocols": {
-    "vless": 127
+    "vless": 189,
+    "trojan": 1,
+    "hysteria2": 1
    },
-   "alive": 0.92,
-   "hash": "dbe136c1b9e01b9b",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.8,
+   "hash": "04e12b53a66be489",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -904,17 +900,18 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 113,
-   "secure": 113,
+   "nodes": 110,
+   "secure": 110,
    "protocols": {
-    "vless": 113
+    "vless": 109,
+    "hysteria2": 1
    },
-   "alive": 0.92,
-   "hash": "90699498851dd52a",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 1.0,
+   "hash": "ca3e59a40404c0dd",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
-   "recommended": false
+   "recommended": true
   },
   {
    "id": "found-ceb0c9f14d",
@@ -937,9 +934,9 @@
     "vless": 30
    },
    "alive": 0.93,
-   "hash": "599b59f63d1c1365",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "hash": "50b8c822b5584c19",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -958,15 +955,15 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 564,
-   "secure": 494,
+   "nodes": 700,
+   "secure": 613,
    "protocols": {
-    "vless": 564
+    "vless": 700
    },
-   "alive": 1.0,
-   "hash": "66cfaf3a2124cb79",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.97,
+   "hash": "3e157c4dfa48aa92",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": true
   },
@@ -985,77 +982,18 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 1758,
-   "secure": 1679,
+   "nodes": 1770,
+   "secure": 1695,
    "protocols": {
-    "ss": 238,
-    "trojan": 299,
-    "vless": 132,
-    "vmess": 1089
+    "ss": 234,
+    "trojan": 292,
+    "vless": 126,
+    "vmess": 1118
    },
    "alive": 1.0,
-   "hash": "9ac710b087fdb7b5",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
-   "failingSince": null,
-   "recommended": false
-  },
-  {
-   "id": "found-a17b386f85",
-   "title": "miladtahanian · sub.txt",
-   "author": "miladtahanian",
-   "homepage": "https://github.com/miladtahanian/V2RayCFGDumper",
-   "license": "не указана",
-   "description": "Найден поиском по GitHub: sub.txt. کافیگ V2Ray جدید هر 15 دقیقه",
-   "mode": "any",
-   "mirrors": [
-    "https://raw.githubusercontent.com/miladtahanian/V2RayCFGDumper/main/sub.txt",
-    "https://cdn.jsdelivr.net/gh/miladtahanian/V2RayCFGDumper@main/sub.txt"
-   ],
-   "origin": "found",
-   "status": "ok",
-   "error": null,
-   "nodes": 148,
-   "secure": 144,
-   "protocols": {
-    "ss": 42,
-    "vless": 92,
-    "vmess": 11,
-    "trojan": 3
-   },
-   "alive": 0.85,
-   "hash": "2c5c9f487297fd3d",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
-   "failingSince": null,
-   "recommended": false
-  },
-  {
-   "id": "found-d7afd33016",
-   "title": "histeenn · 5.txt",
-   "author": "histeenn",
-   "homepage": "https://github.com/histeenn/VLESS-PO-GRIBI",
-   "license": "MIT",
-   "description": "Найден поиском по GitHub: 5.txt. VLESS ПО ГРИБЫ🍄",
-   "mode": "any",
-   "mirrors": [
-    "https://raw.githubusercontent.com/histeenn/VLESS-PO-GRIBI/main/deploy/subscriptions/5.txt",
-    "https://cdn.jsdelivr.net/gh/histeenn/VLESS-PO-GRIBI@main/deploy/subscriptions/5.txt"
-   ],
-   "origin": "found",
-   "status": "ok",
-   "error": null,
-   "nodes": 137,
-   "secure": 132,
-   "protocols": {
-    "ss": 39,
-    "vless": 89,
-    "vmess": 9
-   },
-   "alive": 0.9,
-   "hash": "88fa843bbd157b9b",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "hash": "71b222e79cfc40fc",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -1074,48 +1012,17 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 672,
-   "secure": 630,
+   "nodes": 113,
+   "secure": 113,
    "protocols": {
-    "vless": 665,
-    "hysteria2": 7
+    "vless": 113
    },
-   "alive": 0.85,
-   "hash": "e6181ec5cf15d08b",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.96,
+   "hash": "ddd75bc4bcfd6992",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
-  },
-  {
-   "id": "found-4c8e2b521d",
-   "title": "svinakraft-maker · ru.txt",
-   "author": "svinakraft-maker",
-   "homepage": "https://github.com/svinakraft-maker/FlareFeed",
-   "license": "MIT",
-   "description": "Найден поиском по GitHub: ru.txt. 🛜🛜🛜 Free VPN 🛜🛜🛜, Russia Bybass (VLESS/VMess/Trojan/SS/Hy2/TUIC) Through Cloudflare Workers.",
-   "mode": "any",
-   "mirrors": [
-    "https://raw.githubusercontent.com/svinakraft-maker/FlareFeed/main/public/ru.txt",
-    "https://cdn.jsdelivr.net/gh/svinakraft-maker/FlareFeed@main/public/ru.txt"
-   ],
-   "origin": "found",
-   "status": "ok",
-   "error": null,
-   "nodes": 127,
-   "secure": 107,
-   "protocols": {
-    "ss": 20,
-    "vless": 74,
-    "vmess": 27,
-    "trojan": 6
-   },
-   "alive": 1.0,
-   "hash": "f68833f6f1c29c05",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
-   "failingSince": null,
-   "recommended": true
   },
   {
    "id": "found-7579aacf78",
@@ -1137,12 +1044,12 @@
    "protocols": {
     "vless": 30
    },
-   "alive": 0.97,
-   "hash": "996bd8a4f2006651",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.9,
+   "hash": "0696ea8c412c523b",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
-   "recommended": true
+   "recommended": false
   },
   {
    "id": "found-2f0ae75b27",
@@ -1159,17 +1066,17 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 220,
-   "secure": 214,
+   "nodes": 310,
+   "secure": 301,
    "protocols": {
-    "vless": 125,
-    "ss": 70,
-    "vmess": 25
+    "ss": 117,
+    "vless": 176,
+    "vmess": 17
    },
-   "alive": 1.0,
-   "hash": "a06af1200aeb5d53",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.97,
+   "hash": "6c81305b74311232",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -1195,9 +1102,9 @@
     "vmess": 5,
     "trojan": 4
    },
-   "alive": 0.88,
+   "alive": 0.82,
    "hash": "fa58081af33b57ae",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
    "changedAt": "2026-11-24T22:32:17+00:00",
    "failingSince": null,
    "recommended": false
@@ -1216,16 +1123,16 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 514,
-   "secure": 514,
+   "nodes": 646,
+   "secure": 634,
    "protocols": {
-    "vless": 512,
+    "vless": 644,
     "hysteria2": 2
    },
-   "alive": 0.95,
-   "hash": "085af413d3e5f908",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.9,
+   "hash": "bf53594203747ceb",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -1244,18 +1151,18 @@
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 335,
-   "secure": 329,
+   "nodes": 391,
+   "secure": 386,
    "protocols": {
-    "vless": 312,
-    "hysteria2": 20,
-    "vmess": 2,
-    "trojan": 1
+    "vless": 373,
+    "hysteria2": 15,
+    "trojan": 2,
+    "vmess": 1
    },
-   "alive": 0.93,
-   "hash": "0ca6fc766e5a0ac2",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.9,
+   "hash": "f827f981be0188a9",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
@@ -1275,43 +1182,130 @@
    "status": "ok",
    "error": null,
    "nodes": 100,
-   "secure": 99,
+   "secure": 100,
    "protocols": {
-    "vless": 97,
-    "hysteria2": 2,
-    "vmess": 1
+    "vless": 96,
+    "hysteria2": 3,
+    "trojan": 1
    },
-   "alive": 1.0,
-   "hash": "61b59f97cab61ac1",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.95,
+   "hash": "b97b2c813c840e50",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   },
   {
-   "id": "found-e1a75d3fb1",
-   "title": "iboxz · vless",
-   "author": "iboxz",
-   "homepage": "https://github.com/iboxz/free-v2ray-collector",
-   "license": "не указана",
-   "description": "Найден поиском по GitHub: vless. V2Ray config collector, multiple protocols support Mix, Reality, VLESS, VMESS, Shadowsocks, Trojan",
+   "id": "found-fb3e1efcb1",
+   "title": "svinakraft-maker · podpiska.txt",
+   "author": "svinakraft-maker",
+   "homepage": "https://github.com/svinakraft-maker/FlareFeed",
+   "license": "MIT",
+   "description": "Найден поиском по GitHub: podpiska.txt. 🛜🛜🛜 Free VPN 🛜🛜🛜, Russia Bybass (VLESS/VMess/Trojan/SS/Hy2/TUIC) Through Cloudflare Workers.",
    "mode": "any",
    "mirrors": [
-    "https://raw.githubusercontent.com/iboxz/free-v2ray-collector/main/main/vless",
-    "https://cdn.jsdelivr.net/gh/iboxz/free-v2ray-collector@main/main/vless"
+    "https://raw.githubusercontent.com/svinakraft-maker/FlareFeed/main/public/podpiska.txt",
+    "https://cdn.jsdelivr.net/gh/svinakraft-maker/FlareFeed@main/public/podpiska.txt"
    ],
    "origin": "found",
    "status": "ok",
    "error": null,
-   "nodes": 237,
-   "secure": 148,
+   "nodes": 1418,
+   "secure": 1143,
    "protocols": {
-    "vless": 237
+    "hysteria2": 197,
+    "ss": 221,
+    "trojan": 94,
+    "vless": 700,
+    "vmess": 206
    },
-   "alive": 0.68,
-   "hash": "93209cf96bef0195",
-   "checkedAt": "2026-11-24T22:32:17+00:00",
-   "changedAt": "2026-11-24T22:32:17+00:00",
+   "alive": 0.97,
+   "hash": "fc64c6244f63ffe6",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
+   "failingSince": null,
+   "recommended": true
+  },
+  {
+   "id": "found-23479708a4",
+   "title": "terik21 · WhiteKeys",
+   "author": "terik21",
+   "homepage": "https://github.com/terik21/HiddifySubs-VlessKeys",
+   "license": "не указана",
+   "description": "Найден поиском по GitHub: WhiteKeys. ",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/terik21/HiddifySubs-VlessKeys/main/WhiteKeys",
+    "https://cdn.jsdelivr.net/gh/terik21/HiddifySubs-VlessKeys@main/WhiteKeys"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 316,
+   "secure": 295,
+   "protocols": {
+    "vless": 313,
+    "hysteria2": 3
+   },
+   "alive": 0.53,
+   "hash": "12b012796a8c6409",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
+   "failingSince": null,
+   "recommended": false
+  },
+  {
+   "id": "found-cf7987b351",
+   "title": "terik21 · WhiteKeys2",
+   "author": "terik21",
+   "homepage": "https://github.com/terik21/HiddifySubs-VlessKeys",
+   "license": "не указана",
+   "description": "Найден поиском по GitHub: WhiteKeys2. ",
+   "mode": "white",
+   "mirrors": [
+    "https://raw.githubusercontent.com/terik21/HiddifySubs-VlessKeys/main/WhiteKeys2",
+    "https://cdn.jsdelivr.net/gh/terik21/HiddifySubs-VlessKeys@main/WhiteKeys2"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 455,
+   "secure": 432,
+   "protocols": {
+    "hysteria2": 9,
+    "vless": 446
+   },
+   "alive": 0.5,
+   "hash": "3982c133c4cfb984",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
+   "failingSince": null,
+   "recommended": false
+  },
+  {
+   "id": "found-4532cd22cb",
+   "title": "grisha-seleznev · sub_base64.txt",
+   "author": "grisha-seleznev",
+   "homepage": "https://github.com/grisha-seleznev/free-vless-keys-russia",
+   "license": "не указана",
+   "description": "Найден поиском по GitHub: sub_base64.txt. 🔑 Бесплатные VLESS ключи для России — автообновление каждые 2 часа. Ключи в Telegram: @vless_bounty_bot",
+   "mode": "any",
+   "mirrors": [
+    "https://raw.githubusercontent.com/grisha-seleznev/free-vless-keys-russia/main/sub_base64.txt",
+    "https://cdn.jsdelivr.net/gh/grisha-seleznev/free-vless-keys-russia@main/sub_base64.txt"
+   ],
+   "origin": "found",
+   "status": "ok",
+   "error": null,
+   "nodes": 32,
+   "secure": 30,
+   "protocols": {
+    "vless": 32
+   },
+   "alive": 0.96,
+   "hash": "b570b81047e72095",
+   "checkedAt": "2026-11-25T08:45:20+00:00",
+   "changedAt": "2026-11-25T08:45:20+00:00",
    "failingSince": null,
    "recommended": false
   }
